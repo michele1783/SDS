@@ -1,0 +1,75 @@
+---
+title: "Exercise1"
+author: "Michele Luca Puzzo, Marco Muscas, Shokoufeh Mansourihafshejani"
+date: "11/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1.1
+Firstly we want to show how the algorithm computes the vector **y** at the first step. It is initialized as vector of zeros, it is p-dimensional. 
+$$ \textbf{y}= (y_1, ..., y_i, ..., y_p) \hspace{0.2cm}$$
+We are computing the i-th element of the vector **y** at first step. We observe that the frequency vector in the first step is made by all zeros except that for the j-th element that is one.
+So it comes up that i-th element of y is equal to:
+$$ y^{(1)}_i= \sum_{r=1}^p L_{ir} \cdot x^{(1)}_r = L_{ij} \cdot x^{(1)}_j = L_{ij} \cdot 1 = L_{ij}, \hspace{0.2cm} i\in \{1,...p\} $$
+So at the end of the first step **y** will be equal to the column j-th of the random matrix: 
+$$ \mathbf{y^{(1)}}= \mathbf{L_{:j}} $$
+
+At time step k-1, j-th coordinate of **x^(k−2)^** increases by 1 to get **x^(k-1)^**. We call **f** the update of the frequency vector, made by all zeros except for the position j-th. We can break down the frequency vector at the step k-1 as sum of the frequency vector at step k-2 plus the update **f**
+We know that the matrix multiplication has the distributive function respect to the sum so we can write:
+$$ \mathbf{y^{k-1}} = L \cdot \mathbf{x^{k-1}} = L \cdot (\mathbf{x^{k-2}} + \mathbf{f}) = L \cdot \mathbf{x^{k-2}} + L \cdot  \mathbf{f} =  \mathbf{y^{k-2}} + \mathbf{L_{:j}}$$
+The first addend was for the definition the vector **y** at the step k-1 while the second addend is how the column j-th of the matrix L: we have shown this computing the first step. 
+
+## 1.2
+
+
+```{r}
+#initialization of the parameters. For now at random. Then we have to make some trials with bunch of them 
+p = 400
+d = 100000
+n = 1000
+eps = 0.05
+```
+
+I have to compute the frequency vector to compute its norm to check the *Johnson-Lindenstrauss lemma* but in the randomized algorithm we will not use it. We have decided to use the same raw stream because the probability in *JL lemma* simply accounts for the uncertainty implied by the randomness of L. 
+We initialize **y** as a p-dimensional vector of zeros. 
+
+```{r}
+
+x <- vector(mode = "double", length = d)
+D_n <- sample(1:d, n, replace = T)
+for (i in D_n){
+  x[i] <- x[i] + 1 
+}
+norm_x <- norm(x, type ="2")
+```
+
+
+```{r}
+M <- 20
+norm_y <- vector(mode = "double", length = M)
+probab <- 0
+for (r in 1:M){
+  #compute matrix L, one for each simulation 
+  L <- matrix(rnorm(p*d, 0, sqrt(1/p)), nrow = p, ncol = d)
+  y <- vector(mode = "double", length = p)
+  for (k in 1:n){
+    #update the vector y
+    y <- y + L[,D_n[k]]
+  }
+  norm_y[r] <- norm(y, type = "2")
+  if ((norm_y[r]> (1-eps) * norm_x) & (norm_y[r] < (1+eps) * norm_x)){
+  probab <- probab + 1 
+  }
+}
+print(probab/M)
+print(1 - exp(-p*eps^2))
+
+```
+
+```{r}
+
+```
