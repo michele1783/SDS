@@ -28,10 +28,11 @@ The first addend was for the definition the vector **y** at the step k-1 while t
 
 ```{r}
 #initialization of the parameters. For now at random. Then we have to make some trials with bunch of them 
-p = 400
-d = 100000
-n = 1000
-eps = 0.05
+p = 100
+d = 1000000
+n = 10000
+eps = 0.1
+M <- 1000
 ```
 
 I have to compute the frequency vector to compute its norm to check the *Johnson-Lindenstrauss lemma* but in the randomized algorithm we will not use it. We have decided to use the same raw stream because the probability in *JL lemma* simply accounts for the uncertainty implied by the randomness of L. 
@@ -48,8 +49,10 @@ norm_x <- norm(x, type ="2")
 ```
 
 
+
+
 ```{r}
-M <- 20
+
 norm_y <- vector(mode = "double", length = M)
 probab <- 0
 for (r in 1:M){
