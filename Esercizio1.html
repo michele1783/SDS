@@ -386,38 +386,93 @@ summary {
 </div>
 <div id="section-1" class="section level2">
 <h2>1.2</h2>
-<pre class="r"><code>#initialization of the parameters. For now at random. Then we have to make some trials with bunch of them 
-p = 100
-d = 1000000
-n = 10000
-eps = 0.1
-M &lt;- 1000</code></pre>
-<p>I have to compute the frequency vector to compute its norm to check the <em>Johnson-Lindenstrauss lemma</em> but in the randomized algorithm we will not use it. We have decided to use the same raw stream because the probability in <em>JL lemma</em> simply accounts for the uncertainty implied by the randomness of L. We initialize <strong>y</strong> as a p-dimensional vector of zeros.</p>
-<pre class="r"><code>x &lt;- vector(mode = &quot;double&quot;, length = d)
-D_n &lt;- sample(1:d, n, replace = T)
-for (i in D_n){
-  x[i] &lt;- x[i] + 1 
-}
-norm_x &lt;- norm(x, type =&quot;2&quot;)</code></pre>
-<pre class="r"><code>norm_y &lt;- vector(mode = &quot;double&quot;, length = M)
-probab &lt;- 0
-for (r in 1:M){
-  #compute matrix L, one for each simulation 
-  L &lt;- matrix(rnorm(p*d, 0, sqrt(1/p)), nrow = p, ncol = d)
-  y &lt;- vector(mode = &quot;double&quot;, length = p)
-  for (k in 1:n){
-    #update the vector y
-    y &lt;- y + L[,D_n[k]]
+<p>I have to compute the frequency vector to compute its norm to check the <em>Johnson-Lindenstrauss lemma</em> but in the randomized algorithm we will not use it. We have decided to change the raw stream between the different simulations but it makes no difference because the probability in <em>JL lemma</em> simply accounts for the uncertainty implied by the randomness of L. The raw stream has length n, but its indexes can vary between 1 and d and they are integer values.</p>
+<p>In the algorithm <strong>y</strong> will not see the entire raw stream but at each step it will receive just one index to respect the very idea of a streaming algorithm.</p>
+<p>We have created a function called <strong>simulation</strong> in which we have performed the randomized algorithm:</p>
+<p>we initialize <strong>y</strong> as a p-dimensional vector of zeros; at the beginning of each simulation run we compute the random projection matrix (p x d) that is whose entries are drawn independently as N<sub>1</sub>(0, 1/p) so we use the function <em>rnorm</em> to generate its p*d values.</p>
+<p>At each step k we pick the k-th element of the raw stream that is a number j varying between 1 and d and we update the vector <strong>y</strong> adding to it the j-th of L. So in each step we do not see the entire raw stream but just one value! In each step we update just the vector <strong>y</strong></p>
+<p>At the end of each simulation run we compute the norm of <strong>y</strong> and if its value is between <span class="math display">\[ (1- \epsilon) \cdot \|{x} \| \le \|{y} \| \le (1 + \epsilon) \cdot \|{x} \|)\]</span> then we increase by one the integer <em>counts</em> that counts in how many simulation run the JL lemma is respected.</p>
+<p>The output of simulation is the ratio between <em>counts</em> over the number of runs <em>M</em>.</p>
+<pre class="r"><code>M &lt;- 10
+simulation &lt;- function(p, d, n, eps){
+  #initialization of x: it has length d.  
+  x &lt;- vector(mode = &quot;integer&quot;, length = d)
+  #raw stream 
+  D_n &lt;- sample(1:d, n, replace = T)
+  for (i in D_n){
+    #update sequentially of the frequency vector 
+    x[i] &lt;- x[i] + 1 
   }
-  norm_y[r] &lt;- norm(y, type = &quot;2&quot;)
-  if ((norm_y[r]&gt; (1-eps) * norm_x) &amp; (norm_y[r] &lt; (1+eps) * norm_x)){
-  probab &lt;- probab + 1 
+#norm 2 of the frequency vector
+  norm_x &lt;- norm(x, type =&quot;2&quot;)
+  
+
+  counts &lt;- 0
+  for (r in 1:M){
+    #compute matrix L, one for each simulation 
+    L &lt;- matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)
+    y &lt;- vector(mode = &quot;double&quot;, length = p)
+    for (k in 1:n){
+      #update the vector y
+      y &lt;- y + L[,D_n[k]]
+    }
+    norm_y &lt;- norm(y, type = &quot;2&quot;)
+    if ((norm_y&gt; (1-eps) * norm_x) &amp; (norm_y &lt; (1+eps) * norm_x)){
+    counts &lt;- counts + 1 
+    }
+  }
+
+  return (counts/M)
+}</code></pre>
+<p>We have decided to run 4 different simulation in which we change a bit the values of <em>d</em>, the size of the “data-alphabet”, <em>n</em>, size of the raw stream, the tolerance <em>epsilon</em> and <em>p</em>, the size of the projection. Since we have always chosen d larger than n of one order of magnitude. Instead p ignores completely the alphabet size but it has to be much smaller than n.  <span class="math display">\[d\gg n \gg p \]</span> For the second and the fourth value of p we have taken log(n)/<span class="math inline">\(\epsilon\)</span><sup>2</sup> so to have y<sup>(k)</sup> that gives an accurate estimate at each time steps, while for the first and the second value we have taken p of the order of 1/<span class="math inline">\(\epsilon\)</span><sup>2</sup> so at the end of the stream, gives a (1 + <span class="math inline">\(\epsilon\)</span>) approximation of <span class="math inline">\(|x|\)</span> with constant probability.</p>
+<p>So to summarize we have picked four different values of p, but just two different values of p, n and epsilon. We put our values in a data.frame to a better visualization.</p>
+<pre class="r"><code>#Decision of the parameters.  
+d &lt;- c(10^5, 10^5, 10^6)
+n &lt;- c(10^4, 10^4, 10^5)
+eps &lt;- c(0.1, 0.1, 0.05)
+p &lt;- round(c(round(log(100)/eps[1]^2), round(log(n[2])/eps[1]^2), round(log(1000)/eps[2]^2)))
+#put them in a data.frame
+parameters &lt;- data.frame(&quot;d&quot;=d,&quot;n&quot; = n, &quot;p&quot;= p, &quot;Tolerance&quot;= eps) 
+parameters</code></pre>
+<pre><code>##       d     n   p Tolerance
+## 1 1e+05 1e+04 461      0.10
+## 2 1e+05 1e+04 921      0.10
+## 3 1e+06 1e+05 691      0.05</code></pre>
+<p>Now we run our simulations and we also compute for the different values of tolerance and p the values whose JL probability has to be greater.</p>
+<p><span class="math display">\[ (1- e^{-\epsilon^2 \cdot p}) \]</span></p>
+<pre class="r"><code>sim &lt;- c(length = 3)
+JL &lt;- c(length = 3)
+
+for (i in 1:3){
+  sim[i] &lt;- simulation(p[i], d[i], n[i], eps[i])
+  JL[i] &lt;- 1 - exp(-p[i]*eps[i]^2)
+
+}
+sim_1 &lt;- factor(sim)
+JL_1 &lt;- factor(JL)
+parameters$Simulation &lt;- sim_1
+parameters$JL &lt;- JL_1
+parameters</code></pre>
+<pre><code>##       d     n   p Tolerance Simulation                JL
+## 1 1e+05 1e+04 461      0.10          1 0.990048181692152
+## 2 1e+05 1e+04 921      0.10          1 0.999899965957009
+## 3 1e+06 1e+05 691      0.05        0.8  0.82227182452945</code></pre>
+<p>Finally we want to see if JL lemma is checked by our simulation:</p>
+<pre class="r"><code>check &lt;- vector(mode = &quot;character&quot;, length = 3)
+for(i in 1:3){
+  if (sim[i] &gt; JL[i]){
+    check[i] &lt;- &quot;TRUE&quot;
+  }else{
+    check &lt;- &quot;FALSE&quot;
   }
 }
-print(probab/M)</code></pre>
-<pre><code>## [1] 0.848</code></pre>
-<pre class="r"><code>print(1 - exp(-p*eps^2))</code></pre>
-<pre><code>## [1] 0.6321206</code></pre>
+check &lt;- factor(check)
+parameters$Check &lt;- check
+parameters</code></pre>
+<pre><code>##       d     n   p Tolerance Simulation                JL Check
+## 1 1e+05 1e+04 461      0.10          1 0.990048181692152 FALSE
+## 2 1e+05 1e+04 921      0.10          1 0.999899965957009 FALSE
+## 3 1e+06 1e+05 691      0.05        0.8  0.82227182452945 FALSE</code></pre>
 </div>
 
 
