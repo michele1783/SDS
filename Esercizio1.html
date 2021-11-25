@@ -383,6 +383,7 @@ summary {
 <h2>1.1</h2>
 <p>Firstly we want to show how the algorithm computes the vector <strong>y</strong> at the first step. It is initialized as vector of zeros, it is p-dimensional. <span class="math display">\[ \textbf{y}= (y_1, ..., y_i, ..., y_p) \hspace{0.2cm}\]</span> We are computing the i-th element of the vector <strong>y</strong> at first step. We observe that the frequency vector in the first step is made by all zeros except that for the j-th element that is one. So it comes up that i-th element of y is equal to: <span class="math display">\[ y^{(1)}_i= \sum_{r=1}^p L_{ir} \cdot x^{(1)}_r = L_{ij} \cdot x^{(1)}_j = L_{ij} \cdot 1 = L_{ij}, \hspace{0.2cm} i\in \{1,...p\} \]</span> So at the end of the first step <strong>y</strong> will be equal to the column j-th of the random matrix: <span class="math display">\[ \mathbf{y^{(1)}}= \mathbf{L_{:j}} \]</span></p>
 <p>At time step k-1, j-th coordinate of <strong>x<sup>(k−2)</sup></strong> increases by 1 to get <strong>x<sup>(k-1)</sup></strong>. We call <strong>f</strong> the update of the frequency vector, made by all zeros except for the position j-th. We can break down the frequency vector at the step k-1 as sum of the frequency vector at step k-2 plus the update <strong>f</strong> We know that the matrix multiplication has the distributive function respect to the sum so we can write: <span class="math display">\[ \mathbf{y^{k-1}} = L \cdot \mathbf{x^{k-1}} = L \cdot (\mathbf{x^{k-2}} + \mathbf{f}) = L \cdot \mathbf{x^{k-2}} + L \cdot  \mathbf{f} =  \mathbf{y^{k-2}} + \mathbf{L_{:j}}\]</span> The first addend was for the definition the vector <strong>y</strong> at the step k-1 while the second addend is how the column j-th of the matrix L: we have shown this computing the first step.</p>
+<p>So we have shown that increases implicitly the j-th coordinate of x<sup>(k−2)</sup>by 1 to get x<sup>(k-1)</sup> correspondsto an explicit change to obtain y<sup>(k)</sup> is to add the j-th column of L to y<sup>(k−1)</sup>.</p>
 </div>
 <div id="section-1" class="section level2">
 <h2>1.2</h2>
@@ -391,9 +392,9 @@ summary {
 <p>We have created a function called <strong>simulation</strong> in which we have performed the randomized algorithm:</p>
 <p>we initialize <strong>y</strong> as a p-dimensional vector of zeros; at the beginning of each simulation run we compute the random projection matrix (p x d) that is whose entries are drawn independently as N<sub>1</sub>(0, 1/p) so we use the function <em>rnorm</em> to generate its p*d values.</p>
 <p>At each step k we pick the k-th element of the raw stream that is a number j varying between 1 and d and we update the vector <strong>y</strong> adding to it the j-th of L. So in each step we do not see the entire raw stream but just one value! In each step we update just the vector <strong>y</strong></p>
-<p>At the end of each simulation run we compute the norm of <strong>y</strong> and if its value is between <span class="math display">\[ (1- \epsilon) \cdot \|{x} \| \le \|{y} \| \le (1 + \epsilon) \cdot \|{x} \|)\]</span> then we increase by one the integer <em>counts</em> that counts in how many simulation run the JL lemma is respected.</p>
+<p>At the end of each simulation run we compute the norm of <strong>y</strong> and if its value is between <span class="math display">\[ (1- \epsilon) \cdot \|\textbf{x}\| \le \|\textbf{y}\| \le (1 + \epsilon) \cdot \|\textbf{x}\|)\]</span> then we increase by one the integer <em>counts</em> that counts in how many simulation run the JL lemma is respected.</p>
 <p>The output of simulation is the ratio between <em>counts</em> over the number of runs <em>M</em>.</p>
-<pre class="r"><code>M &lt;- 10
+<pre class="r"><code>M &lt;- 1000
 simulation &lt;- function(p, d, n, eps){
   #initialization of x: it has length d.  
   x &lt;- vector(mode = &quot;integer&quot;, length = d)
@@ -424,20 +425,20 @@ simulation &lt;- function(p, d, n, eps){
 
   return (counts/M)
 }</code></pre>
-<p>We have decided to run 4 different simulation in which we change a bit the values of <em>d</em>, the size of the “data-alphabet”, <em>n</em>, size of the raw stream, the tolerance <em>epsilon</em> and <em>p</em>, the size of the projection. Since we have always chosen d larger than n of one order of magnitude. Instead p ignores completely the alphabet size but it has to be much smaller than n.  <span class="math display">\[d\gg n \gg p \]</span> For the second and the fourth value of p we have taken log(n)/<span class="math inline">\(\epsilon\)</span><sup>2</sup> so to have y<sup>(k)</sup> that gives an accurate estimate at each time steps, while for the first and the second value we have taken p of the order of 1/<span class="math inline">\(\epsilon\)</span><sup>2</sup> so at the end of the stream, gives a (1 + <span class="math inline">\(\epsilon\)</span>) approximation of <span class="math inline">\(|x|\)</span> with constant probability.</p>
+<p>We have decided to run 3 different simulation in which we change a bit the values of <em>d</em>, the size of the “data-alphabet”, <em>n</em>, size of the raw stream, the tolerance <em>epsilon</em> and <em>p</em>, the size of the projection. Since we have always chosen d larger than n of one order of magnitude. Instead p ignores completely the alphabet size but it has to be much smaller than n.  <span class="math display">\[d\gg n \gg p \]</span> For the first value of p we have taken log(n)/<span class="math inline">\(\epsilon\)</span><sup>2</sup> so to have y<sup>(k)</sup> that gives an accurate estimate at each time steps, while for the second and the third values we have taken p of the order of 1/<span class="math inline">\(\epsilon\)</span><sup>2</sup> so at the end of the stream, gives a (1 + <span class="math inline">\(\epsilon\)</span>) approximation of <span class="math inline">\(|x|\)</span> with constant probability.</p>
 <p>So to summarize we have picked four different values of p, but just two different values of p, n and epsilon. We put our values in a data.frame to a better visualization.</p>
 <pre class="r"><code>#Decision of the parameters.  
-d &lt;- c(10^5, 10^5, 10^6)
-n &lt;- c(10^4, 10^4, 10^5)
-eps &lt;- c(0.1, 0.1, 0.05)
-p &lt;- round(c(round(log(100)/eps[1]^2), round(log(n[2])/eps[1]^2), round(log(1000)/eps[2]^2)))
+d &lt;- c(10^5, 10^5, 10^4)
+n &lt;- c(10^4, 10^4, 10^3)
+eps &lt;- c(0.1, 0.075, 0.2)
+p &lt;- round(c(round(log(n[1])/eps[1]^2), round(log(100)/eps[2]^2), round(log(50)/eps[3]^2)))
 #put them in a data.frame
 parameters &lt;- data.frame(&quot;d&quot;=d,&quot;n&quot; = n, &quot;p&quot;= p, &quot;Tolerance&quot;= eps) 
 parameters</code></pre>
 <pre><code>##       d     n   p Tolerance
-## 1 1e+05 1e+04 461      0.10
-## 2 1e+05 1e+04 921      0.10
-## 3 1e+06 1e+05 691      0.05</code></pre>
+## 1 1e+05 10000 921     0.100
+## 2 1e+05 10000 819     0.075
+## 3 1e+04  1000  98     0.200</code></pre>
 <p>Now we run our simulations and we also compute for the different values of tolerance and p the values whose JL probability has to be greater.</p>
 <p><span class="math display">\[ (1- e^{-\epsilon^2 \cdot p}) \]</span></p>
 <pre class="r"><code>sim &lt;- c(length = 3)
@@ -451,13 +452,8 @@ for (i in 1:3){
 sim_1 &lt;- factor(sim)
 JL_1 &lt;- factor(JL)
 parameters$Simulation &lt;- sim_1
-parameters$JL &lt;- JL_1
-parameters</code></pre>
-<pre><code>##       d     n   p Tolerance Simulation                JL
-## 1 1e+05 1e+04 461      0.10          1 0.990048181692152
-## 2 1e+05 1e+04 921      0.10          1 0.999899965957009
-## 3 1e+06 1e+05 691      0.05        0.8  0.82227182452945</code></pre>
-<p>Finally we want to see if JL lemma is checked by our simulation:</p>
+parameters$JL &lt;- JL_1</code></pre>
+<p>Finally we want to see if JL lemma is checked by our simulation. We cannot use “&gt;” to compare the value obtained by the simulation and the theoretical value because the last one is really near to one, so we take the max and then with function <em>identical</em> we compare them. We put all values in data.frame for have a complete vision of our results.</p>
 <pre class="r"><code>check &lt;- vector(mode = &quot;character&quot;, length = 3)
 for(i in 1:3){
   if (sim[i] &gt; JL[i]){
@@ -470,9 +466,13 @@ check &lt;- factor(check)
 parameters$Check &lt;- check
 parameters</code></pre>
 <pre><code>##       d     n   p Tolerance Simulation                JL Check
-## 1 1e+05 1e+04 461      0.10          1 0.990048181692152 FALSE
-## 2 1e+05 1e+04 921      0.10          1 0.999899965957009 FALSE
-## 3 1e+06 1e+05 691      0.05        0.8  0.82227182452945 FALSE</code></pre>
+## 1 1e+05 10000 921     0.100          1 0.999899965957009  TRUE
+## 2 1e+05 10000 819     0.075      0.999  0.99001703361642  TRUE
+## 3 1e+04  1000  98     0.200      0.994  0.98015890525563  TRUE</code></pre>
+</div>
+<div id="section-2" class="section level2">
+<h2>1.3</h2>
+<p>We have achieved our goal because we have implemented the algorithm updating only the vector <strong>y</strong>. Moreover we have set p to a value of the order 1/^2, in one case also put it equals to log(n)/^2. Setting in this way p <em>JL lemma</em> guarantees a probability circa equals to one, like 0.999. Our simulations confirm the lemma!</p>
 </div>
 
 
