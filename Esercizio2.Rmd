@@ -1,0 +1,126 @@
+---
+title: "Esercizio2"
+author: "Michele Luca Puzzo"
+date: "11/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 2.1
+
+To have a legit density I have to impose that the approximating density is greater than 0 for each x belonging to the support. Moreover the integral of the approximating density over all the support, [0,1] has to be equal to 1. 
+
+$S_X = [0,1]$
+
+
+1. $\int_{\mathbb{R}}f(x)dx = 1$
+2. $f(x) > 0 \hspace{0.2cm} \forall x \in S_x$
+
+
+$\int_{0}^{1}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ = $\int_{0}^{h}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ + $\int_{h}^{2h}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ + ... + $\int_{1-h}^{1}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ = $\frac{\pi_1}{h} \cdot h$ + $\frac{\pi_2}{h}\cdot h$+ ...+$\frac{\pi_N}{h}\cdot h$ = 1
+
+1.$\sum_{j=1}^N \pi_j= 1$ 
+
+2.$\pi_j > 0 \hspace{0.2cm} \forall j \in \{1,..,N\}$
+
+So we have obtained that each parameter $\pi_j$ has to be greater than zero and their sum has to be equal to one.
+
+## 2.2
+
+```{r}
+#pigreco is a list of N parameters, h is a fixed parameter
+approx_f <- function(h, x, pigreco){
+  N = ceiling(1/h) #computing number of bins, if N is not a multiple of h, the last bin is shorter
+  for (i in 0:N-1){
+    if((x >= i*h) & (x<(i+1)*h)){ #condition to check to what bin x belongs to
+      return(pigreco[i+1]/h)      # output of the function 
+    }else{
+      if(x==1){
+        return(pigreco[length(pigreco)]/h)
+      }
+    }
+  }
+}
+quantil <- function(h, p, pigreco){
+  cdf <- cumsum(pigreco)      #compute the cumulative function of the list of parameters pigreco
+  N = ceiling(1/h)
+  h_1 = rep(h, N)             #the quantile function will be always equal to the start of the step
+  h_1 = cumsum(h_1)
+  if (p <= pigreco[1]){       #until the first heigth the function will be zero
+    return(0)
+  }else{
+    for (i in 1:(N-1)){
+      if((p > cdf[i]) & (p<=cdf[i+1])){
+        return(h_1[i])      #it will return the starting point of the next step
+      }
+    }
+  }
+}
+qbeta(0.5,2,2)
+quantil(0.001,0.5,param(0.001))
+```
+
+```{r}
+h= 0.2
+pigreco <- c(0.3,0.1,0.2, 0.24, 0.26)
+x <- seq(0,1,0.01)
+t <- vector(mode = "double", length = length(x))
+c = 1
+for(i in x){
+  t[c] <- approx_f(h, i, pigreco)
+  c <- c +1
+}
+
+plot(stepfun(x,c(t,t[101])), xlim=c(0,1),col="red", verticals = FALSE,
+      pch = 19, main = "approx function", col.points = "red", do.point=F)
+
+```
+
+```{r}
+h= 0.2
+pigreco <- c(0.3,0.1,0.2, 0.24, 0.26)
+x <- seq(0,1,0.01)
+q <- vector(mode = "double", length = length(x))
+c = 1
+for(i in x){
+  q[c] <- quantil(h, i, pigreco)
+  c <- c +1
+}
+plot(stepfun(x,c(q,q[101])), xlim=c(0,1), col="red", verticals = FALSE,
+      pch = 19, main = "Quantile function", do.point=F)
+
+```
+
+```{r}
+param <- function(h){
+  N = ceiling(1/h)
+  h_1 = c(0, rep(h, N))
+  h_1 <- cumsum(h_1)
+  a = 2
+  b = 2
+  pigreco = c(length(N))
+  for (i in 1:N){
+    pigreco[i] <- pbeta(h_1[i+1],a,b) - pbeta(h_1[i],a,b)
+  }
+  return(pigreco)
+}
+
+cumsum(pigreco)
+x = seq(0,1,0.01)
+diff <- function(h, eps){
+  w = 0
+  for (i in x){
+  w = w + abs((qbeta(i,2,2)-quantil(h,i,param(h))))
+}
+  return(w)
+}
+
+diff(0.0001, 3)
+```
+
+
+
+
