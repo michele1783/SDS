@@ -31,74 +31,156 @@ So we have shown that increases implicitly the j-th coordinate of $\mathbf{x}^{(
 
 ## 1.2
 
+Since we have a switch we have imagined that not all the traffic flows are equals. There are some of them more important than others. We have thought so that build the frequency vector with an a distribution different from the uniform is a bit more interesting and realistic to represent the problem. We have thought to Beta distribution with parameter  $\alpha = 2$ and $\beta = 5$ for its shape. With this distribution we will have some indexes that are preferred and others that maybe will not ever appear.
+
+```{r}
+#plot the density distribution of beta with alfa = 2 and beta = 5
+curve(dbeta(x,  2, 5), col = "salmon", xlim = c(0,1), ylab = "density", main="PDF of Beta(2,5)", lwd = 2)
+```
+
+Obviously Beta is a continuous distribution defined in [0,1] instead we need a discrete one so to build our vector of probability (the i-th element represents the probability to pick the i-th index) of length d we divide the support in d bins $D_j$ and each element of the vector will be equal to $\int_{D_j} f_x(x)dx$. 
+
+(It's easy to understand that I take inspiration from the second exercise but I have completed the first one with the uniform sampling and I wanted to improve it a bit. For a further development of this exercise I can try other distributions to sample the raw stream for example to compare the results).
+
+
+```{r}
+probab <- function(d, a = 2, b = 5){
+  
+  #length of the bin
+  h = (1/d)
+  
+  #cumulative sum of h. It's useful because consecutive elements represent    the extremes of integrals to compute each element.
+  #for example first integral will be computed between 0 and h
+  #second integral will be computed between h and 2h
+  h_1 = c(0, rep(h, d))
+  h_1 <- cumsum(h_1)
+  
+  #initialization of the vector of probabilities 
+  probi = c(length(d))
+  
+  for (i in 1:d){
+    #actually instead of compute a real integral I exploit cdf function         pbeta and I make the difference between two pbeta computed in two           consecutive h. 
+    probi[i] <- pbeta(h_1[i+1],a,b) - pbeta(h_1[i],a,b)
+  }
+    return(probi)
+  }
+#I want to make some checks
+t <- probab(10^4)
+
+#the sum of the vector of probabilities must be 1
+sum(t)
+
+#each element must not be smaller than zero
+any(t[t<0])
+
+#I want to see where is located the max 
+#0.2 is the x where the density reaches its peak
+which.max(t)*(1/10^4)
+
+#I want to see where is the mean of the vector of probabilities
+mean(t)
+```
+
 We have created a function called **simulation** in which we have performed the randomized algorithm:
 
-we have to compute the frequency vector to compute its norm to check the *Johnson-Lindenstrauss lemma* but in the randomized algorithm we will not use it. We have decided to change the raw stream between the different simulations but it makes no difference because the probability in *JL lemma* simply accounts for the uncertainty implied by the randomness of L. The raw stream has length n, but its indexes can vary between 1 and d and they are integer values. 
+we have to compute the frequency vector to compute its norm to check the *Johnson-Lindenstrauss lemma* but in the randomized algorithm we will not use it. We have decided to change the raw stream among the different simulations but it makes no difference because the probability in *JL lemma* simply accounts for the uncertainty implied by the randomness of L. The raw stream has length n, but its indexes can vary between 1 and d and they are integer values.
 
 In the algorithm **y** will not see the entire raw stream but at each step it will receive just one index to respect the very idea of a streaming algorithm. 
 
 We initialize **y** as a p-dimensional vector of zeros; 
 at the beginning of each simulation run we compute the random projection matrix (p x d) that is whose entries are drawn independently as N~1~(0, 1/p) so we use the function *rnorm* to generate its p$\cdot$d values. 
 
-At each step k we pick the k-th element of the raw stream that is a number j varying between 1 and d and we update the vector **y** adding to it the j-th of L. So in each step we do not see the entire raw stream but just one value! In each step we update just the vector **y**
+At each step k we pick the k-th element of the raw stream that is a number j varying between 1 and d and we update the vector **y** adding to it the j-th of L. So in each step we do not see the entire raw stream but just one value! In each step we update just the vector **y**.
 
 At the end of each simulation run we compute the norm of **y** and if its value is between
 $$ (1- \epsilon) \cdot \|\textbf{x}\| \le \|\textbf{y}\| \le (1 + \epsilon) \cdot \|\textbf{x}\|$$ 
-then we increase by one the integer *counts* that counts in how many simulation run the event of JL lemma is respected, so it counts how many times this event occurs in M simulation runs.  
-The output of *simulation* is the ratio between *counts* over the number of runs *M*.
+then we increase by one the integer *counts*, a variable that counts in how many simulation runs the event of JL lemma is respected, so it counts how many times this event occurs in M simulation runs.  
+
+The output of *simulation* is indeed *counts*.
 
 ```{r}
-M <- 1000
+#number of simulation runs in each simulation
+M <- 1
+
 simulation <- function(p, d, n, eps){
+  
+  #input of the function are:
+  #p: the size of the projection,
+  #eps: tolerance 
+  #n: number of steps
+  #d: alphabet size
+  
   #initialization of x: it has length d.  
   x <- vector(mode = "integer", length = d)
+  
   #raw stream, sampling uniformly from 1 to d 
-  D_n <- sample(1:d, n, replace = T)
+  D_n <- sample(1:d, n, replace = T, prob = probab(d))
+  
   for (i in D_n){
+    
     #update sequentially of the frequency vector 
     x[i] <- x[i] + 1 
   }
+  
 #norm 2 of the frequency vector
   norm_x <- norm(x, type ="2")
   
-
+  #initialize the number of runs that confirm JL lemma
+  #counts is the output of the function
   counts <- 0
+  
   for (r in 1:M){
+    
     #compute matrix L, one for each simulation 
     L <- matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)
+    
+    #initialize the vector y that has dimension p
     y <- vector(mode = "double", length = p)
-    for (k in 1:n){
-      #update the vector y
+    
+    for (k in 1:n){ #k is the step
+      
+      #update the vector y adding the corresponding index at k-th step
       y <- y + L[,D_n[k]]
     }
+    
     #norm 2 of y
     norm_y <- norm(y, type = "2")
-    #check the value of the norm of y
+    
+    #check the value of the norm of y if it respects JL lemma
     if ((norm_y> (1-eps) * norm_x) & (norm_y < (1+eps) * norm_x)){
     counts <- counts + 1 
     }
   }
+  
   #how many times in M simulation norm of y respect the condition
   return (counts)
 }
+
 ```
 
-We have decided to run 7 different simulation in which we change a bit the values of *d*, the size of the “data-alphabet”, *n*, size of the raw stream, the tolerance *epsilon* and *p*, the size of the projection.
+We have decided to run 9 different simulation in which we change a bit the values of *d*, the size of the “data-alphabet”, *n*, size of the raw stream, the tolerance *epsilon* and *p*, the size of the projection.
 We have always chosen d larger than n of one order of magnitude, 10 times larger. Instead p ignores completely
 the alphabet size but it has to be much smaller than n: $d\gg n \gg p$
 
-For the sixth value of p we have taken log(n)/($\epsilon^2$) so $\mathbf{y}^{(k)}$ gives an accurate estimate at each time steps, while for the others values we have taken p of the order of 1/$\epsilon^2$. In the big O notation it means that p is bounded above by this values (up to constant factor that we have chosen equals to log(t) with t $\in$ {e,54,4,10,20}) asymptotically. We have chosen this values for the constant factor so to have different value of p to compare among them keeping constant the tolerance or the JL probability threshold.
+For the sixth value of p we have taken log(n)/($\epsilon^2$) so $\mathbf{y}^{(k)}$ gives an accurate estimate at each time steps, while for the others values we are happy with $\|\textbf{y}\|$ that gives a (1 + $\epsilon$) approximation of $\|\textbf{x}\|$ with constant probability just at the end of the stream. We have taken p of the order of 1/$\epsilon^2$: in the big O notation it means that p is bounded above by this values (up to constant factor that we have chosen equals t $\in$ {1,$\log(54)$,$\log(4)$,$\log(10)$, 3}). 
 
-At the end of the stream,$\|\textbf{y}\|$  gives a (1 + $\epsilon$) approximation of $\|\textbf{x}\|$ with constant probability.
+We have chosen these values so to have different value of p to compare among them keeping constant the tolerance or the JL probability lower bound. In this way we can understand, fixing a parameter, how the others can vary. 
+We have taken almost always the same values for n and d because we have thought that the relevant fact was that they are much bigger than p
 
-So to summarize we have picked seven different values of p, but just two different values of d, and n. We put our values in a data.frame to a better visualization. 
+So to summarize we have picked nine different values of p, but just two different values of d, and n and five different values of tolerance. We put our values in a *data.frame* to a better visualization. 
 
 ```{r}
-#Decision of the parameters.  
-d <- c(10^4, 10^4, 10^5, 10^5, 10^5, 10^5, 10^5)
-n <- c(10^3, 10^3, 10^4, 10^4, 10^4, 10^4, 10^4)
-eps <- c(0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.06)
-p <- c(round(1/eps[1]^2), round(log(54)/eps[2]^2), round(log(4)/eps[3]^2),round(log(10)/eps[4]^2), round(log(20)/eps[5]^2),round(log(n[6])/eps[6]^2), round(log(20)/eps[7]^2))
+#Decision of the parameters. 
+# nine different simulation
+d <- c(10^4, 10^4, 10^5, 10^5, 10^5, 10^5, 10^5, 10^5, 10^5)
+
+n <- c(10^3, 10^3, 10^4, 10^4, 10^4, 10^4, 10^4, 10^4, 10^4)
+
+eps <- c(0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.060012, 0.079979, 0.120096)
+
+#we have used the function round because p must be an integer
+#if I write 3/eps[5]^2 so 3/0.1^2 it gives me back a warning, I do not know why
+p <- c(round(1/eps[1]^2), round(log(54)/eps[2]^2), round(log(4)/eps[3]^2),round(log(10)/eps[4]^2), 300,round(log(n[6])/eps[6]^2), round(3/eps[7]^2), round(3/eps[8]^2), round(3/eps[9]^2))
 
 #put them in a data.frame
 parameters <- data.frame("d"= d,"n" = n, "p" = p, "Tolerance" = eps) 
@@ -108,50 +190,41 @@ parameters
 Now we run our simulations and we also compute for the different values of tolerance and p the values whose JL probability has to be greater: $(1- e^{-\epsilon^2 \cdot p})$
 
 ```{r}
-sim <- c(length = 7)
-JL <- c(length = 7)
+#initialization
+sim <- c(length = 9)
+JL <- c(length = 9)
 
-for (i in 1:7){
-  #run the simulation for each of the value of p,d,n and eps
+for (i in 1:9){
+  #run the simulation for each of the value of p,d,n and epsilon
   sim[i] <- simulation(p[i], d[i], n[i], eps[i])
-  #threshold of JL lemma
+  
+  #lower bound of JL lemma
   JL[i] <- 1 - exp(-p[i]*eps[i]^2)
 
 }
+#in the data.frame I do not put count, but the ratio between count and M
+sim_1 <- factor(sim/M) 
+
+#round to avoid too many decimals
+JL_1 <- factor(round(JL,5)) 
+
 #put the results of simulation in the data.frame
-sim_1 <- factor(sim/M)
-JL_1 <- factor(JL)
 parameters$Simulation <- sim_1
 parameters$JL_Threshold <- JL_1
-```
-
-We want to visualize for each simulation how many runs confirm the JL lemma. 
-
-```{r}
-x <- seq(7) # label of the bars
-barplot(sim, col ="purple", xlab="N. of simulation", ylab="N. of runs in which JL lemma is confirmed", main = "Good runs", names.arg = x)
-```
-
-We want to visualize how the JL probability lower bound varies as function of the size of the projection keeping constant the tolerance, n and d. To do this we have run four simulation (from the third to the sixth). We see that as expected increasing the number of p, the lower bound of probability that $(1- \epsilon) \cdot \|\textbf{x}\| \le \|\textbf{y}\| \le (1 + \epsilon) \cdot \|\textbf{x}\|$ increases, not in a linear way since its expression, given our choice of p (we simplify $\epsilon^2$), is $1-e^{-log(t)}=1-1/t$.  
-
-```{r}
-plot(p[3:6], JL[3:6], main="Trend of JL probability as s function of p", xlab= "p:size of the projection", ylab="JL probability", col="salmon", pch = 19)
-xtick<-seq(100, 1000, by=50)
-axis(side=1, at=xtick, labels = T)
-y <- function(x) 1-1/x #due to the choice of p of the order of 1/eps^2
-x<-seq(4,54,by=1) #choice of the constant the we have assigned to p 
-par(new=TRUE) #admit two plot together
-plot(x,y(x), type = "l", col="orchid", lwd = 2, axes = FALSE, xlab="", ylab="")
 ```
 
 Finally we want to see if JL lemma is checked by our simulations:
 
 ```{r}
-check <- vector(mode = "character", length = 7)
-#check our simulation 
-for(i in 1:7){
+#initialize a vector that tells us if simulation confirm or not the the lemma
+check <- vector(mode = "character", length = 9)
+
+#check our simulation if greater of the JL lower bound
+for(i in 1:9){
+  
   if (sim[i]/M >= JL[i]){
     check[i] <- "TRUE"
+    
   }else{
     check[i] <- "FALSE"
   }
@@ -159,18 +232,102 @@ for(i in 1:7){
 #put the response in data.frame
 check <- factor(check)
 parameters$Check <- check
+
 parameters
 ```
 
-From our first two simulations we can see that keeping constant the number of p, d, n and but increasing tolerance from 0.1 to 0.2 allow to JL probability lower bound to increase (this confirm the natural intuition: if the norm of **y** can move away much from norm of **x** the probability of the event improves. It's a sort of sanity check). 
+Now more specifically we want to visualize for each simulation how many runs confirm the JL lemma. In the sixth simulation there are not runs that do not confirm the JL lemma, but we can expect this because the lower bound was 0.9999 and it is the simulation where we have picked p equals to log(n)/($\epsilon^2$). 
 
-In the last simulation we have picked the same JL probability lower bound of the fifth simulation to see how much p has to increase to decrease tolerance of 0.04.
-Other simulation was useful to see the trend of JL probability as function of p. 
+```{r}
+# label of the bars
+x <- seq(9)
+
+#barplot
+barplot(sim, col ="purple", xlab="N. of simulation", ylab="N. of runs in which JL lemma is confirmed", main = "Good runs", names.arg = x)
+```
+
+From our first two simulations we can observe that keeping constant the number of p, d and n and but increasing tolerance from 0.1 to 0.2 JL probability lower bound increases. This confirm the intuition: if the norm of **y** can move away much from norm of **x** the probability of the event improves. It's a sort of sanity check indeed we have picked a lower number of n and d. 
+
+Now that we know that all of our simulations confirm the JL lemma we want to understand how the parameters are related between them varying two of them and keeping the others fixed. 
+Firtly we want to visualize how the JL probability lower bound varies as function of the size of the projection p keeping constant the tolerance, n and d. To do this we have run four simulation (from the third to the sixth). We see that as expected increasing the number of p, the lower bound of probability that $(1- \epsilon) \cdot \|\textbf{x}\| \le \|\textbf{y}\| \le (1 + \epsilon) \cdot \|\textbf{x}\|$ increases, not in a linear way since its expression, given our choice of p (we simplify $\epsilon^2$), is $1-e^{-log(t)}=1-1/t$.  
+
+```{r}
+
+#plot the lowerbound of JL probability as a function of p
+plot(p[3:6], JL[3:6], main="Trend of JL probability as a function of p", xlab= "p:size of the projection", ylab="JL probability", col="salmon", pch = 19)
+
+#xticks
+xtick<-seq(100, 1000, by=50)
+axis(side=1, at=xtick, labels = T)
+
+#theorical trend
+y <- function(x) 1-1/x #due to the choice of p of the order of 1/eps^2
+x<-seq(4,54,by=1) #choice of the constant the we have assigned to p 
+
+par(new=TRUE) #admit two plot together
+plot(x,y(x), type = "l", col="orchid", lwd = 2, axes = FALSE, xlab="", ylab="")
+
+parameters[3:6,]
+```
+
+Then we have observed running the fifth, seventh, eight and ninth simulation how p varies varying the tolerance and keeping fixed d, n and JL lower bound. JL lower bound constant means keeping constant the product between $\epsilon^2 \cdot p$: we have fix it equals to circa 0.95. If the product of two variables is constant they are inversely proportional so the plot is a branch of an hyperbole. It confirms the natural intuition that if we want that JL is more accurate (low tolerance) we have to increase the size of the projection. 
+
+```{r}
+#plot of trend of p as a function of epsilon keeping fixed d,n and JL lower bound
+plot(c(eps[5],eps[7:9]), c(p[5], p[7:9]), main="Trend of p as a function of epsilon", xlab= "Tolerance", ylab="p:size of the projection", col= "darkblue", pch = 19)
+
+#plot the theoretical trend 
+x<-seq(0.05, 0.15,by=0.01) 
+curve(3/x^2, add = T, col="pink", lwd = 2, xlab="", ylab="")
+
+parameters[c(9,5,8,7),]
+
+```
 
 ## 1.3
 
-We have achieved our goal because we have implemented the algorithm updating only the vector **y**. Moreover we have set p to a value of the order 1/$\epsilon$^2, in one case also put it equals to log(n)/$\epsilon$^2. We have picked epsilon such that p is always smaller than n of at least one order of magnitude, but epsilon is small enough to guarantee an accurate approximation of $\|\textbf{x}\|$ , like (1 $\pm$ 0.1) $\cdot$ $\|\textbf{x}\|$. Furthermore **y** differently of the frequency vector has in this way a reduced dimension. 
+Apparently we can think to have achieved our goal because we have implemented the algorithm updating only the vector **y**. Moreover we have set p to a value of the order 1/$\epsilon$^2, in one case also put it equals to log(n)/$\epsilon$^2. We have picked epsilon such that p is always smaller than n of at least one order of magnitude, but epsilon is small enough to guarantee an accurate approximation of $\|\textbf{x}\|$ , like (1 $\pm$ 0.1) $\cdot$ $\|\textbf{x}\|$. Furthermore **y** differently of the frequency vector has in this way a reduced dimension, so even if **y** is always has a dimension at least of two order of magnitude smaller than **x** it preserves well (1 + $\epsilon$) the information of its length.
 
-Setting in this way p *JL lemma* guarantees for its event a probability circa equals to one, like 0.99, but in spite of that our simulations confirm the lemma because they always give back a probability greater than this value. 
+In the other hand to realize this randomized algorithm we have to store L that is a matrix (p x d) so the algorithm do not respect the desiderata, in particular the fourth one. To verify that is inefficient when d is very big, we have fixed p and checked the running time to build the random matrix that increases with the dimension of d. 
+When d is equal to 10^8 I can't even store the matrix. 
+
+```{r}
+#fixed p, always much smaller than d
+p = 10^2
+
+#d tends to infinite so I pick high values
+d = c(10^4,10^5, 10^6, 10^7)
+
+#initialization
+times <- c(length(d))
+
+#just a counter
+c = 1
+for (i in d){
+  
+  #starting time
+  t1 <- Sys.time()
+  
+  #compute the matrix
+  matrix(rnorm(p*i, 0, sd = sqrt(1/p)), nrow = p, ncol = i)
+  
+  #compute how long it takes to compute the matrix
+  times[c] <- Sys.time()- t1
+  
+  c = c + 1
+}
+
+#using a data.frame to a clean visualization 
+performance <- data.frame("d"= d, "Running time" = times)
+performance
+
+#Tentative with d = 10^8
+
+#matrix(rnorm(p*10^8, 0, sd = sqrt(1/10^2)), nrow = p, ncol = 10^8)
+#print("Errore: memoria 'vector' esaurita (raggiunto il limite?)")
+```
+
+In conclusion with this randomized algorithm we have not been able to achieve our goal it involves to store L so it consumes more than $\mathcal{O}(log(n))$ words of space to process the stream. In a further development we have to think to another randomized algorithm that respects all the desiderata. 
+
 
 
