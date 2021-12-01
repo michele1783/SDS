@@ -7,120 +7,313 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
 ```
 
 ## 2.1
 
-To have a legit density I have to impose that the approximating density is greater than 0 for each x belonging to the support. Moreover the integral of the approximating density over all the support, [0,1] has to be equal to 1. 
+To have a legit density I have to impose that the approximating density is greater than 0 for each x belonging to the support $S_X = [0,1]$. Moreover the integral of the approximating density over all the support has to be equal to 1. 
 
-$S_X = [0,1]$
+$\hat{f}(x, 𝚹) > 0 \hspace{0.2cm} \forall x \in S_x$
 
+The indicator function can be equal to 0 or 1 and h is a length so it is greater than zero so:
 
-1. $\int_{\mathbb{R}}f(x)dx = 1$
-2. $f(x) > 0 \hspace{0.2cm} \forall x \in S_x$
+$$\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)}>0 \Rightarrow \pi_j > 0 \hspace{0.2cm} \forall j \in \{1,..,N\}$$
+$\int_{\mathbb {R}}\hat{f}(x, 𝚹)dx = 1$
 
+I exploit the additivity of the integral respect to the extremes:
 
-$\int_{0}^{1}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ = $\int_{0}^{h}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ + $\int_{h}^{2h}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ + ... + $\int_{1-h}^{1}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx$ = $\frac{\pi_1}{h} \cdot h$ + $\frac{\pi_2}{h}\cdot h$+ ...+$\frac{\pi_N}{h}\cdot h$ = 1
+ $$\int_{0}^{1}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx = \int_{0}^{h}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx + \int_{h}^{2h}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx + ... + \int_{1-h}^{1}\sum_{j=1}^N \frac{\pi_j}{h} \mathbb{I(x \in B_j)} dx = \frac{\pi_1}{h} \cdot h + \frac{\pi_2}{h}\cdot h+ ...+\frac{\pi_N}{h}\cdot h = 1$$
+In  conclusion the constraints that we have obtained, given a fixed h, over the parameter vector ($\pi_1, \pi_2, ... \pi_N$) are:
 
-1.$\sum_{j=1}^N \pi_j= 1$ 
+- $\pi_j > 0 \hspace{0.2cm} \forall j \in \{1,..,N\}$
 
-2.$\pi_j > 0 \hspace{0.2cm} \forall j \in \{1,..,N\}$
+- $\sum_{j=1}^N \pi_j= 1$ 
 
 So we have obtained that each parameter $\pi_j$ has to be greater than zero and their sum has to be equal to one.
 
 ## 2.2
 
+We have implemented the approximating density using a *for loop* and an *if-else condition* to realize the indicator function. When we find the bin corresponding to the x we interrupt the cycle, because it is useless to check all the bins.
+In our convention a generic bin is an interval left closed and right open except the last one, for example the first is [0,h). 
+The number of bins N has to be an integer number: we have used the function *ceiling* knowing that the last bin could be shorter because 1/h could be not integer.
+  
+
 ```{r}
 #pigreco is a list of N parameters, h is a fixed parameter
 approx_f <- function(h, x, pigreco){
-  N = ceiling(1/h) #computing number of bins, if N is not a multiple of h, the last bin is shorter
+  
+  #input:
+  #h: length of the bin
+  #x: point in which we want to compute the function
+  #pigreco: vector of parameter 
+  
+  #output: approximating function computed in x
+  
+  #computing number of bins, the last bin could be shorter
+  N = ceiling(1/h) 
+  
+  #I start from zero to consider also the first bin 
   for (i in 0:N-1){
-    if((x >= i*h) & (x<(i+1)*h)){ #condition to check to what bin x belongs to
-      return(pigreco[i+1]/h)      # output of the function 
+    
+    #condition to check to what bin x belongs to
+    #my arbitrary decision is that a bin is right open and left closed
+    #so they are like [0,h)
+    if((x >= i*h) & (x < (i+1) * h)){ 
+      
+      #approximating function 
+      return(pigreco[i+1]/h)
+      
+      #when I find the right bin it is useless to check also the others
+      break
+      
     }else{
-      if(x==1){
+      #for the last bin is also right closed: [1-h,1] and
+      #with the previous cycle I am not able to catch the output of the function when x is equal to 1
+      if(x==1){                   
         return(pigreco[length(pigreco)]/h)
       }
     }
   }
 }
-quantil <- function(h, p, pigreco){
-  cdf <- cumsum(pigreco)      #compute the cumulative function of the list of parameters pigreco
+```
+
+Then we have picked a value for h, 0.1, and ten parameters $\pi_j$ that respect their constraints to check if our definition of approximating density makes sense. We have plotted the approximating function with a plot of *type = h* because in this way we can better visualize its shape that is just like a histogram, and then we have add the step with a *for loop* and the function *segments*. The area behind the steps is 1 thanks to the contraint that $\sum_{j=1}^N \pi_j= 1$.
+
+```{r}
+#given h
+h= 0.1 
+
+#arbitrary parameter vector that respect its constraints. I pick all positive numbers
+pigreco <- c(0.08,0.13,0.07,0.07,0.12,0.10,0.10,0.10,0.06,0.17)
+
+#check if the constraints are verified
+cat("The sum of my arbitrary parameter must be", sum(pigreco))
+
+#points in which we compute the approximating function
+x <- seq(0, 1, 0.01)
+
+#approximating function 
+f_hat = sapply(x, function(x) approx_f(h, x, pigreco)) 
+
+#plot: type="h" allow to understand better its shape
+plot(x, f_hat, xlim=c(0,1), col="darkgreen", type = "h", main = "approximating PDF", ylab = "approx f") 
+
+#I add the segments to visualize better the steps
+segments(0.9, pigreco[10]/h, 1, pigreco[10]/h, col = "orchid", lwd = 3)
+for(i in 0:9){
+  segments(i*h,pigreco[i+1]/h, i*h + 0.09,pigreco[i+1]/h, col = "orchid", lwd = 3)
+}
+```
+Just to have a visualization of what we are doing, we keep going with this tiny example and we have also tried to plot its CDF. Since the approximating density is a stepwise function, we expect that also its CDF is stepwise. Instead to use the function *integrate*, we have done the cumulative sum of the parameter vector because the area under each step is equal to $h \cdot \frac{\pi_j}{h} = \pi_j$ so it is like we are summing an area after the other. The difference between two consecutive step, for example j and j+1, is equal to the value of $\pi_{j+1}$. The height of the last step is 1. 
+
+```{r}
+approx_F <- function(pigreco){
+  
+  #input: parameter vector
+  #output: plot of the approximating CDF 
+  
+  #I compute CDF doing the cumulative sum. 
+  #I add one at the end just to have a vector of length 101 as x
+  f_grande <- c(rep(cumsum(pigreco), each = 10), 1)
+  
+  plot(x,f_grande, type = "p", col = "salmon", lwd = 1, pch= 19, main = "approximating CDF", ylab="approx F")
+  
+  #with par I admit another plot in the same figure
+  par(new=TRUE)
+  plot(x,f_grande, type = "h", col = "darkgreen", lwd = 1, ylab="")
+  
+  #plot the horizontal line to visualize the first, second and third quartile
+  abline(0.25,0, col = "orchid", lwd = 2)
+  text(0.1,0.3,"p = 0.25")
+  
+  abline(0.5,0, col = "orchid", lwd = 2)
+  text(0.1,0.55,"p = 0.5")
+  
+  abline(0.75,0, col = "orchid", lwd = 2)
+  text(0.1,0.8,"p = 0.75")
+}
+#computing the CDF for my example
+approx_F(pigreco)
+```
+
+To compute the approximating quantile function we need a vector that contains for each step its starting point so we want to know that first step starts at x equals to zero, second step starts at x equals to h and so on. We use the cumulative sum to compute this vector, that we have called **h_list**. An element of this vector, h_list[i], is the output of the function because it is equal to the smallest value x such that the CDF is at least p (the wanted given area), that is the definition of the quantile function. $Q(p) = \hat{F}_x(h\_list[i]) \ge p$. We are able to compute in this way the quantile function because the approximating density is a stepwise function From the plot of the quantile function of our example  
+
+```{r}
+approx_quantil <- function(h, p, pigreco){
+  #input:
+  #h: length of the bin
+  #p: tail area
+  #pigreco: parameter vector
+  
+  #output: quantile of p
+  
+  #compute the cumulative sum of the vector of parameters pigreco
+  cdf <- cumsum(pigreco) 
+  
+  #number of bins
   N = ceiling(1/h)
-  h_1 = rep(h, N)             #the quantile function will be always equal to the start of the step
-  h_1 = cumsum(h_1)
-  if (p <= pigreco[1]){       #until the first heigth the function will be zero
+  
+  #In this case the quantile function will be always equal to the start of the step, so I have also compute the cumsum of the length of the bins 
+  h_list = rep(h, N)             
+  h_list = cumsum(h_1)
+  
+  #until the first height the function will be zero
+  if (p <= pigreco[1]){       
     return(0)
+    
   }else{
+    
     for (i in 1:(N-1)){
-      if((p > cdf[i]) & (p<=cdf[i+1])){
-        return(h_1[i])      #it will return the starting point of the next step
+      
+      #I look for the first bin that cover the given tail area  
+      if((p > cdf[i]) & (p <= cdf[i+1])){
+        
+        #it will return the starting point of the bin
+        return(h_list[i]) 
+        
+        #when I find the right bin it is useless check also the others
+        break
       }
     }
   }
 }
-qbeta(0.5,2,2)
-quantil(0.001,0.5,param(0.001))
+
+#compute and plot the quantile function for my example 
+quantili = sapply(x, function(x) approx_quantil(h, x, pigreco))
+plot(x, quantili, xlim=c(0,1), ylim = c(0,1), col="purple", type = "p", pch = 19, main = "approximating Quantile Function", ylab = "x", xlab="p")
+
+#with stepfun, function is not limited in 0,1 
+#plot(stepfun(x, c(outputs, 1)), xlim=c(0,1), col="red", verticals = FALSE,
+#pch = 19, main = "Quantile function", do.point=F)
 ```
 
+## 2.3
 ```{r}
-h= 0.2
-pigreco <- c(0.3,0.1,0.2, 0.24, 0.26)
-x <- seq(0,1,0.01)
-t <- vector(mode = "double", length = length(x))
-c = 1
-for(i in x){
-  t[c] <- approx_f(h, i, pigreco)
-  c <- c +1
-}
-
-plot(stepfun(x,c(t,t[101])), xlim=c(0,1),col="red", verticals = FALSE,
-      pch = 19, main = "approx function", col.points = "red", do.point=F)
-
-```
-
-```{r}
-h= 0.2
-pigreco <- c(0.3,0.1,0.2, 0.24, 0.26)
-x <- seq(0,1,0.01)
-q <- vector(mode = "double", length = length(x))
-c = 1
-for(i in x){
-  q[c] <- quantil(h, i, pigreco)
-  c <- c +1
-}
-plot(stepfun(x,c(q,q[101])), xlim=c(0,1), col="red", verticals = FALSE,
-      pch = 19, main = "Quantile function", do.point=F)
-
-```
-
-```{r}
-param <- function(h){
+param <- function(h, a = 2, b = 5){
+  #input:
+  #h: length of the bin
+  #a,b: alpha and beta of the beta function
+  
+  #output: parameter vector
+  
+  #number of bins
   N = ceiling(1/h)
+  
+  #I compute the cumsum of the length of the bin so to have values where 
+  #I have to compute pbeta function
   h_1 = c(0, rep(h, N))
   h_1 <- cumsum(h_1)
-  a = 2
-  b = 2
+  
+  #initialize the parameter vector
   pigreco = c(length(N))
+  
   for (i in 1:N){
+    
+    #doing the following difference I am computing the integral of the i-th bin
+    #I am computing the difference between two areas and the result is 
+    #the area in the interval of the bin 
     pigreco[i] <- pbeta(h_1[i+1],a,b) - pbeta(h_1[i],a,b)
   }
+  
+  #parameter vector
   return(pigreco)
 }
 
-cumsum(pigreco)
-x = seq(0,1,0.01)
-diff <- function(h, eps){
-  w = 0
-  for (i in x){
-  w = w + abs((qbeta(i,2,2)-quantil(h,i,param(h))))
-}
-  return(w)
+#sanity check 
+
+cat("The difference between true and approximating quantil function in 0.5 with h = 0.001 is ", qbeta(p = 0.5,2,5) - approx_quantil(h = 0.001,p = 0.5, param(h = 0.001)))
+
+cat("The difference between true and approximating quantil function in 0.5 with h = 0.2 is ", qbeta(p = 0.5,2,5) - approx_quantil(h = 0.1 ,p = 0.5,param(h = 0.1)))
+
+cat("The difference between true and approximating density function in 0.5 with h = 0.001 is ", dbeta(x = 0.5,2,5) - approx_f(h = 0.001, x = 0.5,param(h = 0.001)))
+
+cat("The difference between true and approximating density function in 0.5 with h = 0.1 is ", dbeta(x = 0.5,2,5) - approx_f(h = 0.1, x = 0.5,param(h = 0.1)))
+
+
+#I divide the support [0,1] in 1000 point where I compute the two, true and approximating, quantile function 
+x = seq(0,1,0.001)
+
+
+wass_dist <- function(h, a = 2, b = 5){
+  #input:
+  #h: length of the bin
+  #a,b: alpha and beta of the beta function
+  
+  #output: Wasserstein distance
+  
+  sum(sapply(x, function(x) abs(qbeta(x, a, b) - approx_quantil(h, x, param(h, a, b)))))
+} 
+
+#sanity check 
+cat("The Wasserstein distance for h = 0.001 is: ", wass_dist(0.001))
+cat("The Wasserstein distance for h = 0.1 is: ", wass_dist(0.1))
+cat("The Wasserstein distance for h = 0.5 is: ", wass_dist(0.5))
+
+
+h_large <- function(h, epsilon, a = 2, b = 5){
+  #input:
+  #h: is the first h for which I compute the Wasserstein distance
+  #epsilon: vector of epsilon that I want analyze
+  #a, b: alpha and beta of the beta function
+  
+  #output:
+  #h_l: a vector made by the largest binwidth, one for each epsilon
+  
+  h_l <- rep(0, length(epsilon))
+  c <- 0
+  
+  #I scan all the vector of epsilon and analyze one at a time
+  for (i in epsilon){
+    
+    #Since I look for the largest h, I have to pick the largest distance 
+    #smaller than epsilon
+    while (wass_dist(h, a, b) > i){
+      
+      #For each tentative I decrease h slowly 
+      h = h - 0.0001
+    }
+    
+    #counter to stop the bisection method
+    t = 0
+    
+    #I want to check if there is an h bigger respect to that 
+    #I have pick
+    #at most three iteration for the bisection method
+    while ((wass_dist((h + 0.001)/2, a, b) > i) | (t == 3)){
+      
+      #updating again my h
+      h = (h + 0.001) /2
+      #updating the counter
+      t = t + 1
+    }
+    #I move the next epsilon
+    c <- c +1 
+    
+    #I save the value of h that I found
+    h_l[c] <- h
+  }
+  
+  return(h_l)
 }
 
-diff(0.0001, 3)
+cat("The Wasserstein distance for h = 0.08 is: ", wass_dist(0.2))
+
+#values of epsilon for which we want to find the largest h
+eps = seq(9, 8, -0.1)
+
+#computing the function starting from h = 0.08
+h_largest <- h_large(0.2, eps)
+
+#plot of the trend of the largest binwidth in function of epsilon 
+plot(eps, h_largest, main = "Largest binwidth in function of epsilon", xlab = "epsilon", ylab = "h", pch = 19, col = "blue")#,
+     #xlim = c(0, 4), ylim = c(0,0.009))
+
+#I use the function lm just to show that the trend of h as a function of epsilon
+#is linear 
+fit  <- lm(h_largest~eps)
+abline(fit$coefficients[1], fit$coefficients[2], add = T, col = "green")
 ```
-
 
 
 
