@@ -17,34 +17,37 @@ $\textbf{y}= (y_1, ..., y_i, ..., y_p) \hspace{0.2cm}$
 
 We are computing the i-th element of the vector **y** at first step. We observe that the frequency vector in the first step is made by all zeros except that for the j-th element that is one.
 So it comes up, multiplying the i-th row of L with x, that i-th element of y is equal to:
+
 $$ y^{(1)}_i= \sum_{r=1}^d L_{ir} \cdot x^{(1)}_r = L_{ij} \cdot x^{(1)}_j = L_{ij} \cdot 1 = L_{ij}, \hspace{0.2cm} i\in \{1,...p\} $$
 So doing this computation for all the p rows of L, at the end of the first step **y** will be equal to the column j-th of the random matrix: 
 
 $\mathbf{y^{(1)}}= \mathbf{L_{:j}}$
 
-At time step k-1, j-th coordinate of **x^(k−2)^** increases by 1 to get **x^(k-1)^**. We call **f** the update of the frequency vector, made by all zeros except for the position j-th. We can break down the frequency vector at the step k-1 as sum of the frequency vector at step k-2 plus the update **f**
+At time step k-1, j-th coordinate of **x^(k−2)^** increases by 1 to get **x^(k-1)^**. We call **f** the update of the frequency vector, made by all zeros except for the position j-th. We can break down the frequency vector at the step k-1 as sum of the frequency vector at step k-2 plus the update **f**.
 We know that the matrix multiplication has the distributive property respect to the sum so we can write:
 $$ \mathbf{y}^{(k-1)} = L \cdot \mathbf{x}^{(k-1)} = L \cdot (\mathbf{x}^{(k-2)} + \mathbf{f}) = L \cdot \mathbf{x}^{(k-2)} + L \cdot  \mathbf{f} =  \mathbf{y}^{(k-2)} + \mathbf{L_{:j}}$$
-The first addend was for the definition the vector **y** at the step k-1 while the second addend is how the column j-th of the matrix L: we have shown this computing the first step. 
+The first addend was for the definition the vector **y** at the step k-1 while the second addend is the column j-th of the matrix L: we have shown this computing the first step. 
 
 So we have shown that increases implicitly the j-th coordinate of $\mathbf{x}^{(k-2)}$ by 1 to get $\mathbf{x}^{(k-1)}$ corresponds to an explicit change to obtain $\mathbf{y}^{(k-1)}$ is to add the j-th column of L to $\mathbf{y}^{(k-2)}$.
 
 ## 1.2
 
-Since we have a switch we have imagined that not all the traffic flows are equals. There are some of them more important than others. We have thought so that build the frequency vector with an a distribution different from the uniform is a bit more interesting and realistic to represent the problem. We have thought to Beta distribution with parameter  $\alpha = 2$ and $\beta = 5$ for its shape. With this distribution we will have some indexes that are preferred and others that maybe will not ever appear.
+Since we have a switch we have imagined that not all the traffic flows are equals. There are some of them more important than others. We have thought so that build the frequency vector with an a distribution different from the uniform is a bit more interesting and realistic to represent the problem. We have thought to Beta distribution with parameter  $\alpha = 2$ and $\beta = 2$ for its shape. With this distribution we will have some indexes that are preferred respect to the others:
+the more the index is near to the extremes of the support the less will be its probability to be chosen.
 
 ```{r}
 #plot the density distribution of beta with alfa = 2 and beta = 5
-curve(dbeta(x,  2, 5), col = "salmon", xlim = c(0,1), ylab = "density", main="PDF of Beta(2,5)", lwd = 2)
+curve(dbeta(x,  2, 2), col = "salmon", xlim = c(0,1), ylab = "density", main="PDF of Beta(2,2)", lwd = 2)
+grid()
 ```
 
-Obviously Beta is a continuous distribution defined in [0,1] instead we need a discrete one so to build our vector of probability (the i-th element represents the probability to pick the i-th index) of length d we divide the support in d bins $D_j$ and each element of the vector will be equal to $\int_{D_j} f_x(x)dx$. 
+Obviously Beta is a continuous distribution defined in [0,1] instead we need a discrete one to build our vector of probability (the i-th element represents the probability to pick the i-th index) of length d we divide the support in d bins $D_j$ and each element of the vector will be equal to $\int_{D_j} f_x(x)dx$. 
 
 (It's easy to understand that I take inspiration from the second exercise but I have completed the first one with the uniform sampling and I wanted to improve it a bit. For a further development of this exercise I can try other distributions to sample the raw stream for example to compare the results).
 
 
 ```{r}
-probab <- function(d, a = 2, b = 5){
+vector_probab <- function(d, a = 2, b = 2){
   
   #length of the bin
   h = (1/d)
@@ -59,26 +62,27 @@ probab <- function(d, a = 2, b = 5){
   probi = c(length(d))
   
   for (i in 1:d){
-    #actually instead of compute a real integral I exploit cdf function         pbeta and I make the difference between two pbeta computed in two           consecutive h. 
+    #actually instead of compute a real integral I exploit cdf function pbeta
+    #I make the difference between two pbeta computed in two consecutive h. 
     probi[i] <- pbeta(h_1[i+1],a,b) - pbeta(h_1[i],a,b)
   }
     return(probi)
   }
 #I want to make some checks
-t <- probab(10^4)
+t <- vector_probab(10^4)
 
 #the sum of the vector of probabilities must be 1
-sum(t)
+cat("The sum of the vector of probabilities is: ", sum(t))
 
 #each element must not be smaller than zero
-any(t[t<0])
+cat("Are there any element in the vector of probability smaller than zero?" , any(t[t<=0]))
 
 #I want to see where is located the max 
-#0.2 is the x where the density reaches its peak
-which.max(t)*(1/10^4)
+#0.5 is the x where the density reaches its peak
+cat("Where is the index that has the bigger probability to be chosen?" , which.max(t)*(1/10^4))
 
 #I want to see where is the mean of the vector of probabilities
-mean(t)
+cat("The mean of the vector of proablity is: ", mean(t))
 ```
 
 We have created a function called **simulation** in which we have performed the randomized algorithm:
@@ -100,7 +104,7 @@ The output of *simulation* is indeed *counts*.
 
 ```{r}
 #number of simulation runs in each simulation
-M <- 1
+M <- 1000
 
 simulation <- function(p, d, n, eps){
   
@@ -114,7 +118,7 @@ simulation <- function(p, d, n, eps){
   x <- vector(mode = "integer", length = d)
   
   #raw stream, sampling uniformly from 1 to d 
-  D_n <- sample(1:d, n, replace = T, prob = probab(d))
+  D_n <- sample(1:d, n, replace = T, prob = vector_probab(d))
   
   for (i in D_n){
     
@@ -158,43 +162,45 @@ simulation <- function(p, d, n, eps){
 
 ```
 
-We have decided to run 9 different simulation in which we change a bit the values of *d*, the size of the “data-alphabet”, *n*, size of the raw stream, the tolerance *epsilon* and *p*, the size of the projection.
-We have always chosen d larger than n of one order of magnitude, 10 times larger. Instead p ignores completely
-the alphabet size but it has to be much smaller than n: $d\gg n \gg p$
+We have decided to run 13 different simulation in which we change a bit the values of *d*, the size of the “data-alphabet”, *n*, size of the raw stream, the tolerance *epsilon* and *p*, the size of the projection.
+We have always chosen d larger than n of one order of magnitude, 10 times larger. Instead p ignores completely the alphabet size but it has to be much smaller than n: $d\gg n \gg p$
 
-For the sixth value of p we have taken log(n)/($\epsilon^2$) so $\mathbf{y}^{(k)}$ gives an accurate estimate at each time steps, while for the others values we are happy with $\|\textbf{y}\|$ that gives a (1 + $\epsilon$) approximation of $\|\textbf{x}\|$ with constant probability just at the end of the stream. We have taken p of the order of 1/$\epsilon^2$: in the big O notation it means that p is bounded above by this values (up to constant factor that we have chosen equals t $\in$ {1,$\log(54)$,$\log(4)$,$\log(10)$, 3}). 
+From our first two simulations we have kept constant the number of p, d and n and but increased tolerance from 0.1 to 0.2 so JL probability lower bound increases. This confirm the intuition: if the norm of **y** can move away much from norm of **x** the probability of the event improves. It's a sort of sanity check indeed we have picked a lower number of n and d. 
 
-We have chosen these values so to have different value of p to compare among them keeping constant the tolerance or the JL probability lower bound. In this way we can understand, fixing a parameter, how the others can vary. 
-We have taken almost always the same values for n and d because we have thought that the relevant fact was that they are much bigger than p
+Successively from the third to the ninth simulation we have chosen different value of p, so to compare among them keeping constant, at 0.1, the tolerance firstly, and then instead we have fixed the JL probability lower bound, at 0.95. In this way we can understand, fixing a parameter, how the others can vary. 
 
-So to summarize we have picked nine different values of p, but just two different values of d, and n and five different values of tolerance. We put our values in a *data.frame* to a better visualization. 
+For the sixth value of p we have taken log(n)/($\epsilon^2$) so $\mathbf{y}^{(k)}$ gives an accurate estimate at each time steps, while for the other values we are happy with $\|\textbf{y}\|$ that gives a (1 + $\epsilon$) approximation of $\|\textbf{x}\|$ with constant probability just at the end of the stream. We have taken p of the order of 1/$\epsilon^2$: in the big O notation it means that p is bounded above by this values (up to constant factor that we have chosen equals t $\in$ {1,$\log(54)$,$\log(4)$,$\log(10)$, 3}). 
+
+In the last four simulation we have varied n and d: we want to observe how keeping constant the ratio between p, n and d but changing their values, the JL lower bound is changed. For these simulations we have fixed the tolerance to 0.05. 
+
+So to summarize we have picked twelve different values of p, but just five different values of d, and n and six different values of tolerance. We put our values in a *data.frame* to a better visualization. 
 
 ```{r}
 #Decision of the parameters. 
-# nine different simulation
-d <- c(10^4, 10^4, 10^5, 10^5, 10^5, 10^5, 10^5, 10^5, 10^5)
+# 13 different simulation
+d <- c(10^4, 10^4, 10^5, 10^5, 10^5, 10^5, 10^5, 10^5, 10^5, 5*10^3, 10^4, 5*10^4, 8*10^4)
 
-n <- c(10^3, 10^3, 10^4, 10^4, 10^4, 10^4, 10^4, 10^4, 10^4)
+n <- c(10^3, 10^3, 10^4, 10^4, 10^4, 10^4, 10^4, 10^4, 10^4, 5*10^2, 10^3, 5*10^3, 8*10^3)
 
-eps <- c(0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.060012, 0.079979, 0.120096)
+eps <- c(0.1, 0.2, 0.1, 0.1, 0.1, 0.1, 0.060012, 0.079979, 0.120096, 0.05, 0.05, 0.05, 0.05)
 
 #we have used the function round because p must be an integer
 #if I write 3/eps[5]^2 so 3/0.1^2 it gives me back a warning, I do not know why
-p <- c(round(1/eps[1]^2), round(log(54)/eps[2]^2), round(log(4)/eps[3]^2),round(log(10)/eps[4]^2), 300,round(log(n[6])/eps[6]^2), round(3/eps[7]^2), round(3/eps[8]^2), round(3/eps[9]^2))
+p <- c(round(1/eps[1]^2), round(log(54)/eps[2]^2), round(log(4)/eps[3]^2),round(log(10)/eps[4]^2), 300,round(log(n[6])/eps[6]^2), round(3/eps[7]^2), round(3/eps[8]^2), round(3/eps[9]^2), 50, 100, 500, 800)
 
 #put them in a data.frame
 parameters <- data.frame("d"= d,"n" = n, "p" = p, "Tolerance" = eps) 
 parameters
 ```
 
-Now we run our simulations and we also compute for the different values of tolerance and p the values whose JL probability has to be greater: $(1- e^{-\epsilon^2 \cdot p})$
+Now we run our simulations and we also compute for the different values of tolerance and p the value whose JL probability has to be greater: $(1- e^{-\epsilon^2 \cdot p})$
 
 ```{r}
 #initialization
-sim <- c(length = 9)
-JL <- c(length = 9)
+sim <- c(length = 13)
+JL <- c(length = 13)
 
-for (i in 1:9){
+for (i in 1:13){
   #run the simulation for each of the value of p,d,n and epsilon
   sim[i] <- simulation(p[i], d[i], n[i], eps[i])
   
@@ -217,10 +223,10 @@ Finally we want to see if JL lemma is checked by our simulations:
 
 ```{r}
 #initialize a vector that tells us if simulation confirm or not the the lemma
-check <- vector(mode = "character", length = 9)
+check <- vector(mode = "character", length = 13)
 
 #check our simulation if greater of the JL lower bound
-for(i in 1:9){
+for(i in 1:13){
   
   if (sim[i]/M >= JL[i]){
     check[i] <- "TRUE"
@@ -240,16 +246,15 @@ Now more specifically we want to visualize for each simulation how many runs con
 
 ```{r}
 # label of the bars
-x <- seq(9)
+x <- seq(13)
 
 #barplot
 barplot(sim, col ="purple", xlab="N. of simulation", ylab="N. of runs in which JL lemma is confirmed", main = "Good runs", names.arg = x)
 ```
 
-From our first two simulations we can observe that keeping constant the number of p, d and n and but increasing tolerance from 0.1 to 0.2 JL probability lower bound increases. This confirm the intuition: if the norm of **y** can move away much from norm of **x** the probability of the event improves. It's a sort of sanity check indeed we have picked a lower number of n and d. 
+Now that we know that all of our simulations confirm the JL lemma we want to understand how the parameters are related between them varying two of them and keeping the others fixed.
 
-Now that we know that all of our simulations confirm the JL lemma we want to understand how the parameters are related between them varying two of them and keeping the others fixed. 
-Firtly we want to visualize how the JL probability lower bound varies as function of the size of the projection p keeping constant the tolerance, n and d. To do this we have run four simulation (from the third to the sixth). We see that as expected increasing the number of p, the lower bound of probability that $(1- \epsilon) \cdot \|\textbf{x}\| \le \|\textbf{y}\| \le (1 + \epsilon) \cdot \|\textbf{x}\|$ increases, not in a linear way since its expression, given our choice of p (we simplify $\epsilon^2$), is $1-e^{-log(t)}=1-1/t$.  
+Firstly we want to visualize how the JL probability lower bound varies as function of the size of the projection p keeping constant the tolerance, n and d. To do this we have run four simulation (from the third to the sixth). We see that as expected increasing the number of p, the lower bound of probability that $(1- \epsilon) \cdot \|\textbf{x}\| \le \|\textbf{y}\| \le (1 + \epsilon) \cdot \|\textbf{x}\|$ increases, not in a linear way since its expression, given our choice of p (we simplify $\epsilon^2$), is $1-e^{-log(t)}=1-1/t$.  
 
 ```{r}
 
@@ -260,7 +265,7 @@ plot(p[3:6], JL[3:6], main="Trend of JL probability as a function of p", xlab= "
 xtick<-seq(100, 1000, by=50)
 axis(side=1, at=xtick, labels = T)
 
-#theorical trend
+#theoretical trend
 y <- function(x) 1-1/x #due to the choice of p of the order of 1/eps^2
 x<-seq(4,54,by=1) #choice of the constant the we have assigned to p 
 
@@ -281,14 +286,19 @@ x<-seq(0.05, 0.15,by=0.01)
 curve(3/x^2, add = T, col="pink", lwd = 2, xlab="", ylab="")
 
 parameters[c(9,5,8,7),]
+```
 
+In the last four simulation we have varied p, n and d: we have observed that although we have kept constant the ratio between p,n and d, increasing their values implicate an increasing of the JL lower bound. With values of p too small (smaller than 50) JL lemma cannot guarantee an high probability, so we should increase in that case also the tolerance, while with higher values of p, n and d, we can admit a small tolerance having a good JL probability lower bound. 
+
+```{r}
+parameters[10:13,]
 ```
 
 ## 1.3
 
 Apparently we can think to have achieved our goal because we have implemented the algorithm updating only the vector **y**. Moreover we have set p to a value of the order 1/$\epsilon$^2, in one case also put it equals to log(n)/$\epsilon$^2. We have picked epsilon such that p is always smaller than n of at least one order of magnitude, but epsilon is small enough to guarantee an accurate approximation of $\|\textbf{x}\|$ , like (1 $\pm$ 0.1) $\cdot$ $\|\textbf{x}\|$. Furthermore **y** differently of the frequency vector has in this way a reduced dimension, so even if **y** is always has a dimension at least of two order of magnitude smaller than **x** it preserves well (1 + $\epsilon$) the information of its length.
 
-In the other hand to realize this randomized algorithm we have to store L that is a matrix (p x d) so the algorithm do not respect the desiderata, in particular the fourth one. To verify that is inefficient when d is very big, we have fixed p and checked the running time to build the random matrix that increases with the dimension of d. 
+In the other hand to realize this randomized algorithm we have to store L that is a matrix (p x d) so the algorithm do not respect the desiderata, in particular the fourth one. L has d$\cdot$n entries, so storing L is even worse than storing **x**. To verify that the algorithm is inefficient when d is very big, we have fixed p and checked the running time to build the random matrix that increases with the dimension of d. 
 When d is equal to 10^8 I can't even store the matrix. 
 
 ```{r}
@@ -327,7 +337,48 @@ performance
 #print("Errore: memoria 'vector' esaurita (raggiunto il limite?)")
 ```
 
-In conclusion with this randomized algorithm we have not been able to achieve our goal it involves to store L so it consumes more than $\mathcal{O}(log(n))$ words of space to process the stream. In a further development we have to think to another randomized algorithm that respects all the desiderata. 
+In conclusion with this randomized algorithm we have not been able to achieve our goal because it involves to store L so it consumes more than $\mathcal{O}(log(n))$ words of space to process the stream.
+
+We have thought that we can overcome this problem using a seed. Through the seed we can generate always the same matrix. But instead of storing L, we can simply store a seed and at each step generate only the j-th column. Maybe it could be an improvement of this randomized algorithm. 
+
+```{r}
+p = 10^2
+d = 10^4
+
+#using a seed
+set.seed(1234)
+#storing L
+L = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)
+
+#I want to be sure to generate the same matrix
+set.seed(1234)
+L_1 = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)
+c = 0
+for (i in p){
+  for(j in d){
+      if(L[i,j] != L_1[i,j]){
+          c = c + 1
+  }
+}
+}
+#check that I generate the same matrix. 
+#If c = 0 all the elements are equal. It is zero!!
+#print(c)
+
+#For example I can just generate the column, in this case the tenth. 
+set.seed(1234)
+t1 <- Sys.time()
+col_j = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)[,10]
+
+#Time to generate a column is small
+Sys.time() - t1
+
+#setting a seed I can generate the same column
+set.seed(1234)
+col_j = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)[,10]
+```
+
+
 
 
 
