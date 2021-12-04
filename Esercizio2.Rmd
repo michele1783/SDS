@@ -50,7 +50,7 @@ approx_f <- function(h, x, pigreco){
   
   #output: approximating function computed in x
   
-  #computing number of bins, the last bin could be shorter
+  #computing number of bins, the last bin could be shorter (hence the ceiling)
   N = ceiling(1/h) 
   
   #I start from zero to consider also the first bin 
@@ -156,7 +156,7 @@ approx_quantil <- function(h, p, pigreco){
   
   #In this case the quantile function will be always equal to the start of the step, so I have also compute the cumsum of the length of the bins 
   h_list = rep(h, N)             
-  h_list = cumsum(h_1)
+  h_list = cumsum(h_list)
   
   #until the first height the function will be zero
   if (p <= pigreco[1]){       
