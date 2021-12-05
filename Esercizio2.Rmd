@@ -50,7 +50,7 @@ approx_f <- function(h, x, pigreco){
   
   #output: approximating function computed in x
   
-  #computing number of bins, the last bin could be shorter (hence the ceiling)
+  #computing number of bins, the last bin could be shorter
   N = ceiling(1/h) 
   
   #I start from zero to consider also the first bin 
@@ -78,7 +78,7 @@ approx_f <- function(h, x, pigreco){
 }
 ```
 
-Then we have picked a value for h, 0.1, and ten parameters $\pi_j$ that respect their constraints to check if our definition of approximating density makes sense. We have plotted the approximating function with a plot of *type = h* because in this way we can better visualize its shape that is just like a histogram, and then we have add the step with a *for loop* and the function *segments*. The area behind the steps is 1 thanks to the contraint that $\sum_{j=1}^N \pi_j= 1$.
+Then we have picked a value for h, 0.1, and ten parameters $\pi_j$ that respect their constraints to check if our definition of approximating density makes sense. We have plotted the approximating function with a plot of *type = h* because in this way we can better visualize its shape that is just like a histogram, and then we have add the step with a *for loop* and the function *segments*. The area behind the steps is 1 thanks to the constraint that $\sum_{j=1}^N \pi_j= 1$.
 
 ```{r}
 #given h
@@ -137,7 +137,11 @@ approx_F <- function(pigreco){
 approx_F(pigreco)
 ```
 
-To compute the approximating quantile function we need a vector that contains for each step its starting point so we want to know that first step starts at x equals to zero, second step starts at x equals to h and so on. We use the cumulative sum to compute this vector, that we have called **h_list**. An element of this vector, h_list[i], is the output of the function because it is equal to the smallest value x such that the CDF is at least p (the wanted given area), that is the definition of the quantile function. $Q(p) = \hat{F}_x(h\_list[i]) \ge p$. We are able to compute in this way the quantile function because the approximating density is a stepwise function From the plot of the quantile function of our example  
+To compute the approximating quantile function we need a vector that contains for each step its starting point, so we want to know that first step starts at x equals to zero, second step starts at x equals to h and so on. 
+We use the cumulative sum to compute this vector, that we have called **h_list**. An element of this vector, h_list[i], is the output of the function because it is equal to the smallest value x such that the CDF is at least p (the wanted given area), that is the definition of the quantile function. $Q(p) = \hat{F}_x(h\_list[i]) \ge p$. 
+
+We are able to compute in this way the quantile function because the approximating density is a stepwise function. From the plot of the quantile function of our example we can observe that is also stepwise and the lenght of each step reflect the height of the step in the approximating density. 
+Indeed the longer step in the quantile function it is the one corresponding to the last step in the approximating density that is the highest. 
 
 ```{r}
 approx_quantil <- function(h, p, pigreco){
@@ -183,14 +187,16 @@ approx_quantil <- function(h, p, pigreco){
 quantili = sapply(x, function(x) approx_quantil(h, x, pigreco))
 plot(x, quantili, xlim=c(0,1), ylim = c(0,1), col="purple", type = "p", pch = 19, main = "approximating Quantile Function", ylab = "x", xlab="p")
 
-#with stepfun, function is not limited in 0,1 
-#plot(stepfun(x, c(outputs, 1)), xlim=c(0,1), col="red", verticals = FALSE,
-#pch = 19, main = "Quantile function", do.point=F)
 ```
 
 ## 2.3
+
+As $(\alpha, \beta)$, parameter of the Beta distribution we have chosen the couple (2,2). We have preferred this couple respect to (5, 1) for example because in this second case for x near to zero, we would obtain values for $\pi$ too near to zero, like $1 \cdot 10^{-15}$ and we do not know if the first constraint $\pi_j > 0 \hspace{0.2cm} \forall j$ will be respected, maybe not for numerical issues, so we have chosen a more safe couple, (2,2). 
+
+To compute each element of the parameter vector we have not computed the integral, but we have made the difference between two function *pbeta* computed in two consecutive step' starting point like 0 and h or 1-h and 1. In this way the elements of the parameter vector are equal to the area under the true density in the interval of length h. We can define them in this way because we are working under perfect information, meaning that we can access the true model.
+
 ```{r}
-param <- function(h, a = 2, b = 5){
+param <- function(h, a = 2, b = 2){
   #input:
   #h: length of the bin
   #a,b: alpha and beta of the beta function
@@ -200,10 +206,10 @@ param <- function(h, a = 2, b = 5){
   #number of bins
   N = ceiling(1/h)
   
-  #I compute the cumsum of the length of the bin so to have values where 
-  #I have to compute pbeta function
-  h_1 = c(0, rep(h, N))
-  h_1 <- cumsum(h_1)
+  #I compute the cumsum of the length of the bin so to have values because 
+  #I have to compute pbeta function and I need starting and end point
+  h_list = c(0, rep(h, N))
+  h_list <- cumsum(h_list)
   
   #initialize the parameter vector
   pigreco = c(length(N))
@@ -213,45 +219,64 @@ param <- function(h, a = 2, b = 5){
     #doing the following difference I am computing the integral of the i-th bin
     #I am computing the difference between two areas and the result is 
     #the area in the interval of the bin 
-    pigreco[i] <- pbeta(h_1[i+1],a,b) - pbeta(h_1[i],a,b)
+    pigreco[i] <- pbeta(h_list[i+1],a,b) - pbeta(h_list[i],a,b)
   }
   
   #parameter vector
   return(pigreco)
 }
 
+#beta(5,1) 
+p <- param(0.001,5,1)
+cat("If we had chosen beta(5,1) the first parameter is: ", p[1])
+
+#beta(2,2) 
+p <- param(0.001,2,2)
+cat("We had chosen beta(2,2) so the first parameter is: ", p[1], "It is a bit higher")
+```
+
+To check if we have defined in the right way the approximating quantile and the parameter vector, we compute the difference between the true and the approximating quantile function with difference value for h. We can observe that if we increase h, the difference is greater, as expected because with h larger we are taking a coarser approximation of the true function.
+
+```{r}
 #sanity check 
 
-cat("The difference between true and approximating quantil function in 0.5 with h = 0.001 is ", qbeta(p = 0.5,2,5) - approx_quantil(h = 0.001,p = 0.5, param(h = 0.001)))
+cat("The difference between true and approximating quantil function in 0.5 with h = 0.001 is ", qbeta(p = 0.5,2,2) - approx_quantil(h = 0.001,p = 0.5, param(h = 0.001)))
 
-cat("The difference between true and approximating quantil function in 0.5 with h = 0.2 is ", qbeta(p = 0.5,2,5) - approx_quantil(h = 0.1 ,p = 0.5,param(h = 0.1)))
+cat("The difference between true and approximating quantil function in 0.5 with h = 0.2 is ", qbeta(p = 0.5,2,2) - approx_quantil(h = 0.1 ,p = 0.5,param(h = 0.1)))
 
-cat("The difference between true and approximating density function in 0.5 with h = 0.001 is ", dbeta(x = 0.5,2,5) - approx_f(h = 0.001, x = 0.5,param(h = 0.001)))
+cat("The difference between true and approximating density function in 0.5 with h = 0.001 is ", dbeta(x = 0.5,2,2) - approx_f(h = 0.001, x = 0.5,param(h = 0.001)))
 
-cat("The difference between true and approximating density function in 0.5 with h = 0.1 is ", dbeta(x = 0.5,2,5) - approx_f(h = 0.1, x = 0.5,param(h = 0.1)))
+cat("The difference between true and approximating density function in 0.5 with h = 0.1 is ", dbeta(x = 0.5,2,2) - approx_f(h = 0.1, x = 0.5,param(h = 0.1)))
+```
 
+Now we have written a function, *wass_dist*, that computes the Wasserstein distance. We compute this integral numerically: we take 1000 points in the interval in which we compute the absolute difference between the two functions and then sum all of them. 
+Also here we have observed that the higher is the h, the higher is the Wasserstein distance.
 
+```{r}
 #I divide the support [0,1] in 1000 point where I compute the two, true and approximating, quantile function 
 x = seq(0,1,0.001)
 
-
-wass_dist <- function(h, a = 2, b = 5){
+wass_dist <- function(h, a = 2, b = 2){
   #input:
   #h: length of the bin
   #a,b: alpha and beta of the beta function
   
   #output: Wasserstein distance
   
-  sum(sapply(x, function(x) abs(qbeta(x, a, b) - approx_quantil(h, x, param(h, a, b)))))
+  return(sum(sapply(x, function(x) abs(qbeta(x, a, b) - approx_quantil(h, x, param(h, a, b))))))
 } 
+
 
 #sanity check 
 cat("The Wasserstein distance for h = 0.001 is: ", wass_dist(0.001))
 cat("The Wasserstein distance for h = 0.1 is: ", wass_dist(0.1))
 cat("The Wasserstein distance for h = 0.5 is: ", wass_dist(0.5))
+```
 
+To find  the largest binwidth h such that the Wasserstein distance is smaller than epsilon we have written the function *h_large*. We start from an h for which we are sure that we obtain a distance greater than of the given epsilon. Then we decrease h by 0.001 and try to compute again the distance to check if now the distance is smaller than epsilon and so on and so forth. When we find an $\hat{h}$ which satisfy the inequality we check if there is an h larger than $\hat{h}$ between $\hat{h}$ and ($\hat{h}$ + 0.001). We take the middle point between these two values and check again. We repeat this "bisection method" at most three times to avoid numerical issue. 
 
-h_large <- function(h, epsilon, a = 2, b = 5){
+```{r}
+h_large <- function(h, epsilon, a = 2, b = 2){
   #input:
   #h: is the first h for which I compute the Wasserstein distance
   #epsilon: vector of epsilon that I want analyze
@@ -296,24 +321,117 @@ h_large <- function(h, epsilon, a = 2, b = 5){
   
   return(h_l)
 }
+```
 
-cat("The Wasserstein distance for h = 0.08 is: ", wass_dist(0.2))
+To choose what $\epsilon$'s take in consideration we evaluate the Wasserstein distance for different h to see what values it assumes. Unlike the previous exercise now epsilon is the an absolute error so it can assumes also larger values. We see that for h = 0.08 we obtain an error of 4, that was in our opinion a good starting point for our study. We want to observe how h varies with $\epsilon$ between 4 and 0.1. 
+```{r}
+cat("The Wasserstein distance for h = 0.08 is: ", wass_dist(0.008))
 
 #values of epsilon for which we want to find the largest h
-eps = seq(9, 8, -0.1)
+eps = seq(4, 3.8, -0.1)
 
-#computing the function starting from h = 0.08
-h_largest <- h_large(0.2, eps)
+#computing the function starting from h = 0.101
+h_largest <- h_large(0.008, eps)
+```
 
+Now through a plot we visualize the result: we see that the trend of h respect to $\epsilon$ is linear. The slope of the line is positive so when I decrease $\epsilon$ I have to decrease the length of the bin. This behaviour confirms what we expected: to have a small absolute error we have to decrease the length of the bin such we have a finer approximation of the quantile function. 
+
+```{r}
 #plot of the trend of the largest binwidth in function of epsilon 
-plot(eps, h_largest, main = "Largest binwidth in function of epsilon", xlab = "epsilon", ylab = "h", pch = 19, col = "blue")#,
-     #xlim = c(0, 4), ylim = c(0,0.009))
+plot(eps, h_largest, main = "Largest binwidth in function of epsilon", xlab = "epsilon", ylab = "h", pch = 19, col = "darkorange")
 
 #I use the function lm just to show that the trend of h as a function of epsilon
 #is linear 
 fit  <- lm(h_largest~eps)
-abline(fit$coefficients[1], fit$coefficients[2], add = T, col = "green")
+abline(fit$coefficients[1], fit$coefficients[2], col = "blue", lwd = 2)
 ```
 
+## 2.4
+
+We are working under perfect information, meaning that we can access/query the true model. We have understood from the previous point that the elements of the parameter vector are areas and they are sorted because for example $\pi_1$ represent the area under the Beta density in the first interval. Furthermore we have observed that with the previous choice of $\pi_j$ we have obtained an optimal approximation of the quantile function. 
+
+For this we have decided to to obtain a new parameter vector in this way: each element will be a sample from the beta distribution multiplied for the length of the interval. It is a similar choice from the previous one, but a bit rougher because now we are taking as $\pi_j$ the area of a rectangle with base equals to h and height the Beta distribution in the first point of the interval. 
+
+We have tried also other initialization of the parameter vector, but the results had too poor quality because the approximation of the quantile function was too rough. 
+
+```{r}
+rbeta_scratch <- function(n = 1, range, a = 2, b = 2) {
+  #input:
+  #n: number of sample
+  #range: a vector of length 2, in which I insert the extreme of the interval(along x axis)
+  #a,b: parameter of Beta distribution
+  
+  #output: a point of Beta density(corresponding to an x belonging to range interval)
+
+  #I sample uniformly in the interval range
+  uniforme <- runif(1, range[1], range[2])
+  
+  #I take the corresponding value on Beta density
+  dbeta(uniforme, 2, 2)
+  
+}
+
+parameter_2 <- function(h){
+  #input:
+  #h: length of the bin
+  
+  #output:
+  #new parameter vector 
+  
+  N <- ceiling(1/h)
+  
+  vector(mode = "double", length = N)
+  
+  t[1] <- rbeta_scratch(1, c(0,h), 2, 2)
+  
+  for(i in 1:N-1){
+    t[i+1] <- rbeta_scratch(1,c(i*h,h*(i+1)),2,2)
+  }
+  t <- t*h
+  return(t/sum(t))
+}
+
+#check that the new parameter vector respects the constraints
+sum(parameter_2(0.01))
+```
+
+Now with the same function of before we compute the new Wasserstein distance and we want to check if at the increasing of h, the distance decreases. 
+
+```{r}
+#I divide the support [0,1] in 1000 point where I compute the two, true and approximating, quantile function 
+x = seq(0,1,0.001)
+
+wass_dist_2 <- function(h, a = 2, b = 2){
+  #input:
+  #h: length of the bin
+  #a,b: alpha and beta of the beta function
+  
+  #output: Wasserstein distance
+  a = 0
+  for(i in x){
+    t <- approx_quantil(h, i,parameter_2(h))
+    a = a + abs(qbeta(i,2,2) - t)
+  }
+  return(a)
+} 
 
 
+#sanity check: increasing h the distance increases
+cat("The Wasserstein distance for h = 0.001 is: ", wass_dist_2(0.001))
+cat("The Wasserstein distance for h = 0.1 is: ", wass_dist_2(0.1))
+cat("The Wasserstein distance for h = 0.5 is: ", wass_dist_2(0.5))
+```
+
+Since we have computed in a similar way the distances we want to make a comparison. 
+
+```{r}
+#We check if the distance that we have computed now if similar to the previous one.
+
+cat("The Wasserstein distance for h = 0.001 is: ", abs(wass_dist(0.001) - wass_dist_2(0.001)))
+
+cat("The Wasserstein distance for h = 0.01 is: ", abs(wass_dist(0.01) - wass_dist_2(0.01)))
+
+cat("The Wasserstein distance for h = 0.1 is: ", abs(wass_dist(0.1) - wass_dist_2(0.1)))
+```
+
+We observe that for small h, we almost obtain the same values so we expect the same behaviour of h at varying of $\epsilon$.
