@@ -36,7 +36,7 @@ Since we have a switch we have imagined that not all the traffic flows are equal
 the more the index is near to the extremes of the support the less will be its probability to be chosen.
 
 ```{r}
-#plot the density distribution of beta with alfa = 2 and beta = 5
+#plot the density distribution of beta with alfa = 2 and beta = 2
 curve(dbeta(x,  2, 2), col = "salmon", xlim = c(0,1), ylab = "density", main="PDF of Beta(2,2)", lwd = 2)
 grid()
 ```
@@ -103,7 +103,7 @@ then we increase by one the integer *counts*, a variable that counts in how many
 The output of *simulation* is indeed *counts*.
 
 ```{r}
-#number of simulation runs in each simulation
+#number of simulation runs in each simulation(we pick the value written in the instructions)
 M <- 1000
 
 simulation <- function(p, d, n, eps){
@@ -200,7 +200,9 @@ Now we run our simulations and we also compute for the different values of toler
 sim <- c(length = 13)
 JL <- c(length = 13)
 
+
 for (i in 1:13){
+  
   #run the simulation for each of the value of p,d,n and epsilon
   sim[i] <- simulation(p[i], d[i], n[i], eps[i])
   
@@ -213,6 +215,7 @@ sim_1 <- factor(sim/M)
 
 #round to avoid too many decimals
 JL_1 <- factor(round(JL,5)) 
+
 
 #put the results of simulation in the data.frame
 parameters$Simulation <- sim_1
@@ -303,32 +306,32 @@ When d is equal to 10^8 I can't even store the matrix.
 
 ```{r}
 #fixed p, always much smaller than d
-p = 10^2
+p_prova = 10^2
 
 #d tends to infinite so I pick high values
-d = c(10^4,10^5, 10^6, 10^7)
+d_prova = c(10^4,10^5, 10^6, 10^7)
 
 #initialization
-times <- c(length(d))
+times <- c(length(d_prova))
 
 #just a counter
 c = 1
-for (i in d){
+for (i in d_prova){
   
   #starting time
   t1 <- Sys.time()
   
   #compute the matrix
-  matrix(rnorm(p*i, 0, sd = sqrt(1/p)), nrow = p, ncol = i)
+  matrix(rnorm(p_prova*i, 0, sd = sqrt(1/p_prova)), nrow = p_prova, ncol = i)
   
   #compute how long it takes to compute the matrix
-  times[c] <- Sys.time()- t1
+  times[c] <- round(Sys.time()- t1,5)
   
   c = c + 1
 }
 
 #using a data.frame to a clean visualization 
-performance <- data.frame("d"= d, "Running time" = times)
+performance <- data.frame("d"= d_prova, "Running time" = times)
 performance
 
 #Tentative with d = 10^8
@@ -342,20 +345,20 @@ In conclusion with this randomized algorithm we have not been able to achieve ou
 We have thought that we can overcome this problem using a seed. Through the seed we can generate always the same matrix. But instead of storing L, we can simply store a seed and at each step generate only the j-th column. Maybe it could be an improvement of this randomized algorithm. 
 
 ```{r}
-p = 10^2
-d = 10^4
+p_prova = 10^2
+d_prova = 10^4
 
 #using a seed
 set.seed(1234)
 #storing L
-L = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)
+L = matrix(rnorm(p_prova*d_prova, 0, sd = sqrt(1/p_prova)), nrow = p_prova, ncol = d_prova)
 
 #I want to be sure to generate the same matrix
 set.seed(1234)
-L_1 = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)
+L_1 = matrix(rnorm(p_prova*d_prova, 0, sd = sqrt(1/p_prova)), nrow = p_prova, ncol = d_prova)
 c = 0
-for (i in p){
-  for(j in d){
+for (i in p_prova){
+  for(j in d_prova){
       if(L[i,j] != L_1[i,j]){
           c = c + 1
   }
@@ -363,21 +366,132 @@ for (i in p){
 }
 #check that I generate the same matrix. 
 #If c = 0 all the elements are equal. It is zero!!
-#print(c)
+print(c)
+
 
 #For example I can just generate the column, in this case the tenth. 
 set.seed(1234)
 t1 <- Sys.time()
-col_j = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)[,10]
+col_j = matrix(rnorm(p_prova*d_prova, 0, sd = sqrt(1/p_prova)), nrow = p_prova, ncol = d_prova)[,10]
 
 #Time to generate a column is small
 Sys.time() - t1
 
-#setting a seed I can generate the same column
-set.seed(1234)
-col_j = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)[,10]
+
 ```
 
+Now we are rewriting our *simulation* function without storing the random matrix L, but using a seed and we generate a single column at each step. With this new function *simulation_2* we think that we save memory because we do not store L but at each time we generate a column of random number.
+
+```{r}
+simulation_2 <- function(p, d, n, eps){
+  
+  #input of the function are:
+  #p: the size of the projection,
+  #eps: tolerance 
+  #n: number of steps
+  #d: alphabet size
+  
+  #initialization of x: it has length d.  
+  x <- vector(mode = "integer", length = d)
+  
+  #raw stream, sampling uniformly from 1 to d 
+  D_n <- sample(1:d, n, replace = T)
+  
+  for (i in D_n){
+    
+    #update sequentially of the frequency vector 
+    x[i] <- x[i] + 1 
+  }
+  
+#norm 2 of the frequency vector
+  norm_x <- norm(x, type ="2")
+  
+  #initialize the number of runs that confirm JL lemma
+  #counts is the output of the function
+  counts <- 0
+  set.seed(1234)
+  for (r in 1:M){
+    
+    #initialize the vector y that has dimension p
+    y <- vector(mode = "double", length = p)
+    
+    #no more L!!
+    
+    for (k in 1:n){ #k is the step
+      
+      #update the vector y adding the corresponding index at k-th step
+      #using the same seed
+      
+      l = matrix(rnorm(p*d, 0, sd = sqrt(1/p)), nrow = p, ncol = d)[,D_n[k]]
+      y <- y + l
+    }
+    #norm 2 of y
+    norm_y <- norm(y, type = "2")
+    
+    #check the value of the norm of y if it respects JL lemma
+    if ((norm_y> (1-eps) * norm_x) & (norm_y < (1+eps) * norm_x)){
+    counts <- counts + 1 
+    }
+  }
+  
+  #how many times in M simulation norm of y respect the condition
+  return (counts)
+}
+
+```
+
+To generate at each step p random number drives to a worsening of performance because at each step, so n times, we have to generate p numbers. Instead with the previous algorithm we generate only once the random number. I think it is for this reason that is slower. Even if pxd (random matrix) is greater than pxn (random numbers that we have to generate with our proposal). 
+We can see when we increase the product of p x d, the time to run of my proposal increases a lot respect to the initial algorithm because I have to generate n times p numbers in each simulation. To do this check with times I have chosen M = 2 just to be faster. 
+
+```{r}
+#initialization
+M <- 2
+time_spent <- c(length(4))
+
+#starting time
+time1 <- Sys.time()
+#run the simulation
+t <- simulation(p = 50, d = 5000, n = 500, eps = 0.05)
+#end time
+time2 <- Sys.time()
+#time spent
+time_spent[1] <- round(as.numeric(time2 - time1),5)
+
+
+
+#starting time
+time1 <- Sys.time()
+#run the simulation
+t <- simulation_2(p = 50, d = 5000, n = 500, eps = 0.05)
+#end time
+time2 <- Sys.time()
+#time spent
+time_spent[2] <- round(as.numeric(time2 - time1),5)
+
+
+#starting time
+time1 <- Sys.time()
+#run the simulation
+t <- simulation_2(p = 5, d = 500, n = 50, eps = 0.05)
+#end time
+time2 <- Sys.time()
+#time spent
+time_spent[3] <- round(as.numeric(time2 - time1),5)
+
+
+#starting time
+time1 <- Sys.time()
+#run the simulation
+t <- simulation_2(p = 5, d = 500, n = 50, eps = 0.05)
+#end time
+time2 <- Sys.time()
+#time spent
+time_spent[4] <- round(as.numeric(time2 - time1),5)
+m <- matrix(time_spent,ncol = 2,byrow = T)
+row.names(m) <- c("p x d = 250000", "p x d = 2500")
+colnames(m) <- c("First algo" ,"My proposal")
+m
+```
 
 
 
