@@ -1,5 +1,6 @@
 library(DescTools)
 library(stringr)
+load("~/Desktop/char_fun.RData")
 
 value <- function(team_member, eps, alpha){
   #input:
@@ -18,6 +19,7 @@ value <- function(team_member, eps, alpha){
   
   #compute the max value that the given team member can assume 
   b <- char_fun[[12]] - char_fun[[11]][str_remove(member, team_member_1)]
+  #b = 20 
   
   #compute the min value that the given team member can assume
   a <- char_fun[[1]][team_member]
@@ -26,6 +28,9 @@ value <- function(team_member, eps, alpha){
   M <- ceiling(((b-a)^2/(2*eps^2)) * log(2/alpha))
 
   x <- seq(1,12)
+  
+  #putting a seed
+  set.seed(1234)
 
   value_of_person <- c(length(M))
   for (i in 1:M){
@@ -72,14 +77,24 @@ value <- function(team_member, eps, alpha){
   
 }
 
-
+run_time <- c(length = 3)
+t1 <- Sys.time()
 player_2 <- value(2, 0.02, 0.01)     #M = 324522
+run_time[1] <- Sys.time() - t1 
+t1 <- Sys.time()
 player_12 <- value(12, 0.009, 0.005) #M = 332860
+run_time[2] <- Sys.time() - t1 
+t1 <- Sys.time()
 player_6 <-value(6, 0.015, 0.006)    #M = 332860
+run_time[3] <- Sys.time() - t1 
 
 player_2
 player_12
 player_6
+
+player_2/45 * 100
+player_12/45 * 100
+player_6/45 * 100
 
 # Bonus -------------------------------------------------------------------
 
@@ -179,7 +194,6 @@ abbv <- get.hist.quote(instrument="ADBE", start="2020-01-01",
 amzn <- get.hist.quote(instrument="OGN", start="2020-01-01",
                        quote= "Close", provider="yahoo", drop=TRUE)
 
-#OGN
 
 company <- list(abbv,amzn)
 
