@@ -20,6 +20,110 @@ library(network)
 library(ggplot2)
 ```
 
+## 1. Introduction
+
+The setup of this game is as follows. Here are our players: 
+
+* $A$ - Antwohnette
+* $B$ - BadellPadel
+* $C$ - Chumbawamba 
+
+We know that:
+
+* $\nu(\emptyset)=0$
+* $\nu(A)=\nu(B)=\nu(C)=0$
+* $\nu(AB)=2 \hspace{.5cm} \nu(BC)=2 \hspace{.5cm} \nu(AC)=0$
+* $\nu(ABC)=4$
+
+
+The marginal contribution of each player $j$ in a game $G(\pi, \nu)$, $\pi$ being
+the current permutation considered and $\nu$ the characteristic function, and $S_{\pi}(j)$ the contribution of 
+the predecessors of $j$ in the permutation $\pi$, is defined as: 
+$$ \Delta_{\pi}^{G}(j) = \nu(S_{\pi}(j) \cup \{j\}) - \nu(S_{\pi}(j))$$
+
+We will now have to tackle calculate the various payoffs in each permutation of $A,B,C$. Let us start:
+$$\\[.5cm]$$
+
+<table style="margin-left:auto; margin-right:auto;">
+<tr>
+<td>
+* **ABC**
+  - $\nu(A) = \nu(\emptyset \cup A) - \nu(\emptyset) = 0$ 
+  - $\nu(B) = \nu(A \cup B) - \nu(A) = 2$
+  - $\nu(C) = \nu(AB \cup C) - \nu(AB) = 2$
+</td>
+<td>
+* **ACB**
+  - $\nu(A) = 0$
+  - $\nu(C) = \nu(A \cup C) - \nu(A) = 0$
+  - $\nu(B) = \nu(AC \cup B) - \nu(AC) = 4$
+</td>
+</tr>
+
+<tr>
+<td>
+* **BAC**
+  - $\nu(B) = 0$
+  - $\nu(A) = \nu(AB) - \nu(B) = 2$
+  - $\nu(C) = \nu(AB \cup C) - \nu(AB) = 2$
+</td>
+<td>
+* **BCA**
+  - $\nu(B) = 0$
+  - $\nu(C) = \nu(C \cup B) - \nu(B) = 2$
+  - $\nu(A) = \nu(BC \cup A) - \nu(BC) = 2$
+</td>
+</tr>
+
+<tr>
+<td>
+* **CAB**
+  - $\nu(C) = 0$
+  - $\nu(A) = \nu(A \cup C) - \nu(C) = 0$
+  - $\nu(B) = \nu(AC \cup B) - \nu(AC) = 4$
+</td>
+<td>
+* **CBA**
+  - $\nu(C) = 0$
+  - $\nu(B) = \nu(B \cup C) - \nu(C) = 2$
+  - $\nu(A) = \nu(BC \cup A) - \nu(BC) = 2$
+</td>
+</tr>
+
+</table>
+</div>
+
+$$\\[1cm]$$
+
+Finally, we can put everything in this more readable table: 
+
+
+<div style = "width:40%; margin-left:30%;">
+| Permutation | $\nu(A)$ | $\nu(B)$ | $\nu(C)$| 
+| ----------: | :------: | :------: | :------:| 
+|     ABC     |    0     |    2     |     2   | 
+|     ACB     |    0     |    4     |     0   | 
+|     BAC     |    2     |    0     |     2   | 
+|     BCA     |    2     |    0     |     2   | 
+|     CAB     |    0     |    4     |     0   | 
+|     CBA     |    2     |    2     |     0   | 
+|  **Total**  |  **6**   |  **12**  |  **6**  |
+</div>
+
+
+
+Now we can calculate $\psi(j)$: 
+
+$$\psi^G(j) =  \frac{1}{p!} \cdot \sum_{\pi \in \Pi_P} \Delta_{\pi}^{G}(j)$$
+Using the definition above: 
+
+* $\psi(A) = \frac{1}{6} \cdot (\Delta_{\text{ABC}}(\text{A}) + \Delta_{\text{ACB}}(\text{A}) + ...) = 1$
+* $\psi(B) = 2$
+* $\psi(C) = 1$
+
+$$\psi(A) + \psi(B) + \psi(C) = \nu(ABC) = 4$$
+
+So the efficiency is respected, as their sum is 4 and equal to $\nu(ABC)$.
 ## 2. Probabilistic
 
 We have wanted to to approximate the Shapley payoffs of player 2, because he is the member that works more, 7 hours per day, player 12, because he is one of the member that works less, 3 hours per day, and player 6, because he is in the middle between them with 5 hours per day. 
