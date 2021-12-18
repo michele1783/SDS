@@ -1,0 +1,558 @@
+---
+title: "HW2"
+author: "Michele Luca Puzzo"
+date: "12/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DescTools)
+library(stringr)
+library(grid)
+library(gtable)
+library(GGally)
+library(DescTools)
+library(stringr)
+library(igraph)
+library(gridExtra)
+library(network)
+library(ggplot2)
+```
+
+## 2. Probabilistic
+
+We have wanted to to approximate the Shapley payoffs of player 2, because he is the member that works more, 7 hours per day, player 12, because he is one of the member that works less, 3 hours per day, and player 6, because he is in the middle between them with 5 hours per day. 
+
+We have written the function *value* that return an approximation of the Shapley payoff taking in input an integer number that represents the player, the tolerance and confidence for the Hoeffding confidence intervals. 
+
+Firstly the function has to compute the simulation size M, to do it we have computed the upper bound *b* for the characteristic function. From the introductory part we have realized that the characteristic function for a variable is maximum when it is located at the end of the permutation and *b* varies among different members. On the other hand it takes its minimum value when player is located at the start of the permutation and *a* is equal to zero for each member. 
+
+Through the function *sample* we are able to pick different permutations of the team members and for each of them we compute the marginal contribution of the chosen player with respect to that permutation. (We identify the position in the permutation of our player, truncated the permutation at his position, compute the characteristic function of coalitions with and without our player and make the difference between them.) If the chosen player is in the first place of the permutation his marginal contribution is zero. Eventually we take the mean of all marginal contribution computed in each simulation, that is our approximation of the Shapley payoff for the chosen player.
+
+```{r}
+load("~/Desktop/char_fun.RData")
+value <- function(team_member, eps, alpha){
+  #input:
+  #team_member: an integer that represent the player that we want to study
+  #eps: tolerance
+  #alpha: confidence
+  
+  #output:
+  #Shapley payoff of the player
+  
+  #string with all the team members
+  member <- "1-2-3-4-5-6-7-8-9-10-11-12"
+  
+  #this line is useful to delete the given team member from the "member" string
+  team_member_1 <- paste("-", as.character(team_member), sep = "")
+  
+  #compute the max value that the given team member can assume 
+  b <- char_fun[[12]] - char_fun[[11]][str_remove(member, team_member_1)]
+  #b = 20 
+  
+  #compute the min value that the given team member can assume
+  a <- char_fun[[1]][team_member]
+  
+  #Through Hoeffding compute the number of iteration 
+  M <- ceiling(((b-a)^2/(2*eps^2)) * log(2/alpha))
+
+  x <- seq(1,12)
+  
+  #putting a seed
+  set.seed(1234)
+
+  value_of_person <- c(length(M))
+  for (i in 1:M){
+    
+    #sample
+    campione <- sample(x)
+    
+    #discover the position of my person
+    position <- which(campione == team_member) 
+    
+    #sort element until my person
+    element <- sort(campione[1:position])
+    
+    #write in the same format of char_fun
+    element_1<- paste(element, collapse = "-")
+    
+    #compute the value with my person
+    v_1 <- char_fun[[position]][element_1] 
+    
+    #consider separately if the member is in the first position
+    if(v_1 == 0){
+      
+      #so its values is zero
+      value_of_person[i] <- 0
+      
+    }else{
+      
+      #delete my person from the sequence
+      element_2 <- sort(element[element != team_member])
+      
+      #write in the same format of char_fun
+      element_3 <- paste(element_2, collapse = "-")
+      
+      #compute the value without my person
+      v_2 <- char_fun[[position-1]][element_3]
+      
+      #compute the value of my person 
+      value_of_person[i] <- v_1 - v_2
+    }
+  }
+  
+  #take the mean of my person 
+  return(mean(value_of_person))
+  
+}
+```
+
+We have tried to run our function with rougher value of b, but the only difference is that M increased (the approximation remained the same), so we think that is correct that the characteristic function of a player is maximum when he is located at the end of the sequence. 
+According Hoeffding (1- $\alpha$) confidence set we have:
+$M_{\epsilon}^* \ge \frac{(b-a)^2 \cdot log(\frac{2}{\alpha^2})}{2 \cdot \epsilon^2}$
+
+M is the smallest simulation size that allows to control deviation between the approximation and the true value of the Shapley payoff at a probability level equals to confidence. 
+We have chosen different tolerances and confidences for three players in such way that for each of them we have almost the same smallest simulation size, circa 330,000. 
+In this way the computational time is not too high, circa 30s for each simulation and at the same time we have very small values for $\alpha$ and $\epsilon$: confidence $1-\alpha$ is around 0.99 while the tolerance $\epsilon$ varies between 0.009 and 0.02. 
+
+Our procedure to approximate the true value of the Shapley payoff, traps the true value in an interval ($\theta-\epsilon$, $\theta+\epsilon$) with probability $1 -\alpha$ that is in every simulation a bit greater than 0.99, while the size of intervals is really small, $2 \cdot \epsilon$.
+
+For player 2 *b* is higher (7) than for player 12 (3), so for his simulation we have chosen higher tolerance and $\alpha$, to try to have similar M. While for player 6 and 12 we have the same simulation size M and confidence(1 - $\alpha$), but different values of tolerances. 
+
+```{r}
+epsilon <- c(0.02,0.015,0.009)
+confidence <- c(1-0.009, 1-0.005, 1-0.005)
+run_time <- c(length = 3)
+#starting time
+t1 <- Sys.time()
+
+#player 2
+player_2 <- value(2, epsilon[1], confidence[1])  #M = 330976
+
+#run time
+run_time[1] <- Sys.time() - t1 
+
+#starting time
+t1 <- Sys.time()
+
+#player 6
+player_6 <-value(6, epsilon[2], confidence[2])  #M = 332860
+
+#run time
+run_time[2] <- Sys.time() - t1 
+
+#starting time
+t1 <- Sys.time()
+
+#player 12
+player_12 <- value(12, epsilon[3], confidence[3]) #M = 332860
+
+#run time
+run_time[3] <- Sys.time() - t1 
+
+```
+
+We  have rescaled the payoffs that we have obtained: we have divided the results of our simulations for 45, the values of coalition includes all the player so in this way $\nu(P) = 1$. We have done it to make this game **simple**, indeed it is monotone and rescaling the characteristic function it can take values only between 0 and 1. In simple games Shapley payoff measures the *power of a player*: the probability that he can influence the outcome of the game. 
+This confirms the intuition that player 2 is the one more influential because he works more than other so he can allow to save more hours than others. The opposite reasoning for player 12, that works less than any other. 
+The more the player works the higher is his payoff. Indeed player 2 is the one with higher Shapley payoff, while player 12 the one with the smaller Shapley payoff, player 6 in the middle. Our results are summarized in a dataframe. 
+
+```{r}
+
+#rescale the shapley payoff and round their value
+shapley <- c(round(player_2/45, 3),round(player_6/45, 3), round(player_12/45, 3))
+
+#player that we have chosen 
+player <- c(2,6,12)
+
+#dataframe to visualize clearer the results. 
+results <- data.frame("Player" = player,  "Shapley Payoff"=  shapley, "Tolerance" = epsilon, "Confidence" = confidence, "Run Time" = run_time)
+results
+
+
+```
+
+## 2. Bonus
+
+We have tried to write functions to get characteristic function for a general game of this type. We know from the introductory part that the value of a coalition is defined as $\nu$(C)={# of hours potentially saved by well organized coalition}. So we know that if a coalition is composed by a single person we cannot save hours, while if n players work during the same hour we save n-1 working hours. If we want to know if two or more players work at the same time we scan the schedule column by column.
+
+Firstly we have created the *char_function_1* that receives in input the schedule of workers and a vector containing the member of coalition in which we are interested in. We have thought at the schedule of workers as a matrix M where $M_{i,j} is 1 if the i-th player works at the j-th hour, 0 otherwise. This function returns the value of the given coalition. 
+
+```{r}
+
+char_function_1 <- function(matrice, lista){
+  
+  #input:
+  #matrice: it represents the schedule of workers
+  #lista: coalition of which we are interested in 
+  
+  #output:
+  #value of the given coalition 
+  
+  #we assume that if coalition is composed by one member
+  #its value is zero
+  if(length(lista) == 1){
+    return(0)
+  }else{
+    
+    #we take the the schedule of workers that belong to our coalition 
+    #(for example if we have the coalition c(1,2,4) 
+    #we will pick row 1,2 and 4 of the schedule
+    member <- matrice[lista,]
+    
+    #we compare the columns of the selected rows
+    #if two workers work during the same hour the sum of that column will be greater than one
+    #we save (the sum of the column - 1)hours
+    #we consider hours in which more players work
+    vettore <- colSums(member)
+    return(sum(vettore[vettore > 1] - 1))
+  }
+  
+}
+
+#just to have a feedback we have built the schedule of the homework
+#1 if the player works during that hour, 0 otherwise
+uno <- c(0,0,0,1,1,1,1,1)
+due <- c(1,1,1,1,1,1,1,0)
+tre <- c(0,1,1,1,1,1,1,0)
+quattro <- c(0,0,0,0,0,1,1,1)
+cinque <- c(0,0,0,0,1,1,1,0)
+sei <- c(0,0,1,1,1,1,1,0)
+sette <- c(1,1,1,1,0,0,0,0)
+otto <- c(1,1,1,0,0,0,1,0)
+nove <- c(0,1,1,1,1,0,0,0)
+dieci <- c(0,0,1,1,1,1,0,1)
+undici <- c(1,1,0,0,0,1,1,0)
+dodici <- c(0,0,0,1,0,0,1,1)
+matrice_prova <- rbind(uno,due,tre,quattro,cinque,sei,sette,otto,nove,dieci,undici,dodici)
+
+#few trials to check if our char_function_1 works
+char_function_1(matrice_prova, c(12,11,10,9,8,7,6,5,4,3,2,1)) == char_fun[[12]]
+char_function_1(matrice_prova, c(2,1)) == char_fun[[2]][1]
+char_function_1(matrice_prova, c(2)) == char_fun[[1]][2]
+
+#another example, the working hours in a day are the same, 8
+x <- seq(1,8)
+
+#number of workers
+n <- 200
+
+#just build a random matrix that represents the schedule 
+matrice <- sapply(x, function(x) sample(c(0,1), size = n, replace = T, prob = c(0.75,0.25)))
+
+#compute the value for a given coalition 
+char_function_1(matrice, c(3,14,21))
+
+
+```
+
+Then we have created *char_function* that taking in input the number of players *n* and the working schedule, still represented by a matrix of zeros and ones. This function computes the values for each possible coalition: firstly it saves all possible combinations in a list *comb* and later we compute the value for each coalition with the same reasoning as before. The final results are in the list *ris* that has a length equals to the number of possible coalition $2^n-1$ (-1 is due to that the empty set is not considered) and each element of this list has two values, the first one is the value of the coalition while the second one is a sequence of integer number corresponding to the coalition. We have done two query at the end two verify the results, we sort the query before making the search inside our list. At the end we compute all the combinations and their values for a general case where *n* = 200 and the working schedule is random. 
+
+```{r}
+char_function <- function(matrice, n){
+  
+  #input:
+  #matrice: it represents the schedule
+  #n: number of players
+  
+  #output:
+  #ris: list containing for each coalition its value
+  
+  #list that will contain all the combinations, all possible coalitions 
+  comb <- list()
+  for (i in 1:n){
+    
+    #we compute all the combination, that are 2^(number of players) - 1(it does not consider empty set)
+    #we use a function of library(DescTools)
+    a <- CombSet(n, i, repl=FALSE, ord=FALSE)
+    
+    #we scan all the combinations
+    for(j in 1:nrow(a)){
+      
+      #save the j-th combination in  a temporary variable
+      temp <- list(a[j,])
+      
+      #we fill the list with the combinations obtained
+      comb <- append(comb, temp)
+    }
+  }
+  
+  #it contains the value of each coalition 
+  risultato <- c(length(comb)) 
+  
+  #a list of lists that contains all the coalitions and their values
+  ris <- list()
+  
+  #scan all possible coalition
+  for(i in 1:length(comb)){
+    
+    #if coalition is composed by one member its value is one
+    if(length(comb[[i]]) == 1){
+      risultato[i] <- 0
+    }else{
+      
+      #we take the the rows of players that belong to i-th coalition
+      member <- matrice[comb[[i]],]
+      
+      #we compare the columns of the selected rows
+      #if two workers work during the same hour the sum of that column will be greater than one
+      #we save (the sum of the column - 1)hours
+      #we consider hours in which more players work
+      #just like in char_function_1 
+      vettore <- colSums(member)
+      risultato[i] <- sum(vettore[vettore > 1] - 1)
+    }
+    
+   #creation of a temporary list in which the first number is the value of the coalition, while the second is the coalition
+   temp <- list(list(risultato[i], comb[[i]]))
+   
+   #output
+   ris <- append(ris, temp)
+  }
+  #return 
+  return(ris)
+}
+
+#just to check if our function is right we take the schedule of the homework 
+char_funs <- char_function(matrice_prova, n = 12)
+
+#coalition of which we are interested in 
+query <- sort(seq(12,1))
+
+#scan all the coalition
+for(i in 1:(2^12-1)){
+  
+  #suppressWarnings needs when we compare coalition of different sizes
+  #all elements 
+  if(suppressWarnings(all(char_funs[[i]][[2]] == query)==TRUE)){
+    
+    #its value
+    print(char_funs[[i]][[1]])
+  }
+}
+
+#another example
+query <- sort(c(1,2))
+for(i in 1:(2^12-1)){
+  if(suppressWarnings(all(char_funs[[i]][[2]] == query) ==TRUE)){
+    print(char_funs[[i]][[1]])
+  }
+}
+
+#number of workers
+n <- 15
+
+#just build a random matrix that represents the schedule 
+matrice <- sapply(x, function(x) sample(c(0,1), size = n, replace = T, prob = c(0.75,0.25)))
+
+char_funs <- char_function(matrice, n)
+
+```
+
+## 3. Statistical
+
+Following the idea of diversification we have collected *n=15* stocks from five different sectors, three for each one.
+
+```{r statistical}
+#names of stocks
+company = c("Netflix", "Electronic Arts", "Activision Blizzard", "Phillips 66", "Coterra", "Diamondback Energy","American Airlines Group", "United Airlines", "Southwest Airlines", "Domino's Pizza", "Amazon", "Tractor Supply Company", "Molson Coors", "Kellogg's", "JM Smucker")
+
+#names of groups
+stocks <- c(rep("Communication Services",3),rep("Energy",3),rep("Industrials",3),rep("Consumer Discretionary",3),rep("Consumer Staples",3))
+
+#visualization
+data.frame("Sector" = stocks, "Stocks" = company)
+```
+
+For each stock we have take the closing price from January 1, 2020 till today. Using the function *get_hist_quote* we have taken the closing price and not the adjusted closing price, but if we downloaded data from *"Yahoo! Finance"* and created a dataset we would not have updated data each time we would want to run the code. 
+We have created a list *quotes* in which each element i has *m* closing prices of the i-th stock, *m* is the number of days in which the Stock Market has been opened from January 1, 2020 till today.
+
+Then we have created the data matrix *X* which elements are $x_{t,j} = log(\frac{c_{t,j}}{c_{t-1,j}})$ where t and t-1 are two consecutive days. X has m-1 rows and n columns.
+
+
+```{r statistical}
+
+suppressMessages(require(tseries, quietly = TRUE)) # Load the package
+options("getSymbols.warning4.0" = FALSE) # Stop info-messages to show up
+
+
+#tag of stocks
+company = c("NFLX", "EA", "ATVI", "PSX", "CTRA", "FANG","AAL", "UAL", "LUV", "DPZ", "AMZN", "TSCO", "TAP", "K", "SJM")
+
+#counter
+c = 0
+
+#number of stocks
+n = length(company)
+
+#list in which each element contains all the closing prices for that stock
+quotes <- list(length = n)
+
+for(i in company){
+  c = c + 1
+  
+  #retrieving the closing price for c-th stock
+  quotes[c] <- list(get.hist.quote(instrument=i, start="2020-01-01",
+                           quote= "Close", provider="yahoo", drop=TRUE))
+  
+}
+
+#number of days in which Stock Market was open from 2020-01-01 till today
+m <- length(quotes[[1]])
+
+#data matrix
+X <- matrix(, nrow = m - 1, ncol = n, dimnames = list(1:(times -1), company))
+
+#rows of data matrix
+r <- c(length = m - 1)
+
+#for each company
+for(j in 1:n){
+  
+  #for each pair of days
+  for(i in 1:(m-1)){
+    
+    #computing the logarithm between two closing price between i+1-th and i-th day of company j-th 
+    r[i] <- log(as.numeric(quotes[[j]][i+1])/as.numeric(quotes[[j]][i]))
+  }
+  #fill the data matrix
+  X[,j] <- r
+}
+```
+
+
+
+```{r statistical}
+m_adj <- function(data, conf){
+  #input:
+  #data: data matrix
+  #conf: alpha for confidence interval 
+  
+  #output:
+  #adj: adjacency matrix 
+  
+  #all possible way to take two stocks
+  couples <- CombSet(ncol(data), 2)
+  
+  #list of CI for Pearson correlation for each couple of stocks
+  corrr <- list()
+  
+  #for each couple of stocks
+  for(i in 1: nrow(couples)){
+    
+    #compute CI for Pearson correlation for i-th couple of stock
+    corrr[i] <- list(cor.test(data[,couples[i,1]], data[,couples[i,2]], method = "pearson", conf.level = conf)$conf.int)
+  }
+  
+  #initialize the adjacency matrix
+  adj <- matrix(0, nrow = n, ncol = n, dimnames=list(company, company))
+  
+  #for each couple of stocks
+  for(i in 1:nrow(couples)){
+    
+    #check if the extremes of CI are concordant
+    if((corrr[[i]][1] * corrr[[i]][2] > 0)){
+      
+      #we put an edge if CI does not include zero
+      #adjacency matrix is symmetric
+      adj[couples[i,1],couples[i,2]] <- 1
+      adj[couples[i,2],couples[i,1]] <- 1
+    }
+  }
+  
+  #adjacency matrix
+  return(adj)
+}
+
+#compute different adjacency matrix for different alpha
+adi_1 = m_adj(X, 0.5)
+adi_2 = m_adj(X, 0.7)
+adi_3 = m_adj(X, 0.9)
+adi_4 = m_adj(X, 0.99)
+adi_5 = m_adj(X, 0.9999)
+adi_6 = m_adj(X, 0.999999)
+ad <- list(adi_1, adi_2, adi_3, adi_4, adi_5, adi_6)
+
+#counter
+c <- 0
+
+#vector that contains number of edges between a sector and the others
+#first element is the number of edges between Communication Services and other sectors
+#second element is the number of edges between Energy and other sectors and so on
+edge_out = c( length = n / 3)
+
+#for each adjacency matrix
+for(i in ad){
+  c <- c + 1
+  
+  #create the graph from adjacency matrix
+  t <- graph_from_adjacency_matrix(i, mode = "undirected")
+  
+  #compute the degree for each node
+  #-2 because we are interested in number of edges between a stock and stock belonging to other sectors
+  #there are always two edges between a stock and the other two stocks belonging to the same sector
+  degree_out_group <- degree(t) - 2
+  
+  edge_out <- c(edge_out, sum(degree_out_group[1:3]), sum(degree_out_group[4:6]), sum(degree_out_group[7:9]), sum(degree_out_group[10:12]), sum(degree_out_group[13:15]))
+}
+
+```
+
+
+
+```{r, echo =FALSE}
+
+statt <- function(adj){
+  c <- 0
+  for(i in seq(1,ncol(adj),3)){
+    if(adj[i,i+1] + adj[i,i+2] + adj[i+1,i+2] == 3){
+      print("Attention: stock in the same group are not correlated!")
+    }else{
+      c <- c + 3
+    }
+  }
+}
+
+g_1 <- network(adi_1)
+g_1 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+t_1 <- ggnet2(g_1, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+
+g_2 <- network(adi_2)
+g_2 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+t_2 <- ggnet2(g_2, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+
+g_3 <- network(adi_3)
+g_3 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+t_3 <- ggnet2(g_3, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+
+g_4 <- network(adi_4)
+g_4 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+t_4 <- ggnet2(g_4, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+
+g_5 <- network(adi_5)
+g_5 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+t_5 <- ggnet2(g_5, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+
+
+g_6 <- network(adi_6)
+g_6 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+t_6 <- ggnet2(g_6, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+
+
+gridExtra::grid.arrange(t_1 + ggtitle("alpha = 0.5"), t_2 +ggtitle("alpha = 0.7"), nrow = 2)
+gridExtra::grid.arrange(t_3 + ggtitle("alpha = 0.9"), t_4 +ggtitle("alpha = 0.99"), nrow = 2)
+gridExtra::grid.arrange(t_5 + ggtitle("alpha = 0.9999"), t_6 +ggtitle("alpha = 0.999999"), nrow = 2)
+
+
+alpha <- c(rep("a=0.5" , 5) , rep("a=0.7" , 5) , rep("a=0.9" , 5) , rep("a=0.99" , 5), rep("a=0.9999" , 5), rep("a=0.999999" , 5))
+groups <- rep(c("Comm.Serv", "Energy" , "Industrials", "Cons.Discr","Cons.Staples") , 6)
+edges_with_other_groups <- edge_out
+data <- data.frame("Different values of alpha" = alpha, groups, "Number of edges with other groups" = edges_with_other_groups)
+
+# Grouped
+
+ggplot(data, aes(fill=groups, y=edges_with_other_groups, x=alpha)) + 
+  geom_bar(position="dodge", stat="identity")+ scale_fill_manual("legend", values = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"))
+
+
+```
