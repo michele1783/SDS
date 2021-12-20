@@ -18,8 +18,8 @@ library(igraph)
 library(gridExtra)
 library(network)
 library(ggplot2)
+library(plotrix)
 ```
-
 ## 1. Introduction
 
 The setup of this game is as follows. Here are our players: 
@@ -124,6 +124,7 @@ Using the definition above:
 $$\psi(A) + \psi(B) + \psi(C) = \nu(ABC) = 4$$
 
 So the efficiency is respected, as their sum is 4 and equal to $\nu(ABC)$.
+
 ## 2. Probabilistic
 
 We have wanted to to approximate the Shapley payoffs of player 2, because he is the member that works more, 7 hours per day, player 12, because he is one of the member that works less, 3 hours per day, and player 6, because he is in the middle between them with 5 hours per day. 
@@ -339,15 +340,13 @@ char_function_1(matrice_prova, c(2)) == char_fun[[1]][2]
 x <- seq(1,8)
 
 #number of workers
-n <- 200
+n <- 20
 
 #just build a random matrix that represents the schedule 
 matrice <- sapply(x, function(x) sample(c(0,1), size = n, replace = T, prob = c(0.75,0.25)))
 
 #compute the value for a given coalition 
-char_function_1(matrice, c(3,14,21))
-
-
+char_function_1(matrice, c(3,14,18,19))
 ```
 
 Then we have created *char_function* that taking in input the number of players *n* and the working schedule, still represented by a matrix of zeros and ones. This function computes the values for each possible coalition: firstly it saves all possible combinations in a list *comb* and later we compute the value for each coalition with the same reasoning as before. The final results are in the list *ris* that has a length equals to the number of possible coalition $2^n-1$ (-1 is due to that the empty set is not considered) and each element of this list has two values, the first one is the value of the coalition while the second one is a sequence of integer number corresponding to the coalition. We have done two query at the end two verify the results, we sort the query before making the search inside our list. At the end we compute all the combinations and their values for a general case where *n* = 200 and the working schedule is random. 
@@ -448,7 +447,6 @@ n <- 15
 
 #just build a random matrix that represents the schedule 
 matrice <- sapply(x, function(x) sample(c(0,1), size = n, replace = T, prob = c(0.75,0.25)))
-
 char_funs <- char_function(matrice, n)
 
 ```
@@ -457,16 +455,26 @@ char_funs <- char_function(matrice, n)
 
 Following the idea of diversification we have collected *n=15* stocks from five different sectors, three for each one.
 
-```{r statistical}
-#names of stocks
-company = c("Netflix", "Electronic Arts", "Activision Blizzard", "Phillips 66", "Coterra", "Diamondback Energy","American Airlines Group", "United Airlines", "Southwest Airlines", "Domino's Pizza", "Amazon", "Tractor Supply Company", "Molson Coors", "Kellogg's", "JM Smucker")
+<div style = "width:40%; margin-left:30%;">
+| Sector                 |     Stocks                     | 
+| ---------------------: | :----------------------------: | 
+| Communication Services |    Netflix                     |  
+|                        |    Electronic Arts             | 
+|                        |    Activision Blizzard         | 
+| Energy                 |    Phillips 66                 |
+|                        |    Coterra                     |
+|                        |    Diamondback Energy          | 
+| Industrials            |    American Airlines Group     |  
+|                        |    United Airlines             |
+|                        |    Southwest Airlines          | 
+| Consumer Discretionary |    Domino's Pizza              |   
+|                        |    Amazon                      |  
+|                        |    Tractor Supply Company      |
+| Consumer Staples       |    Molson Coors                |
+|                        |    Kellogg's                   |
+|                        |   JM Smucker                   |
+</div>
 
-#names of groups
-stocks <- c(rep("Communication Services",3),rep("Energy",3),rep("Industrials",3),rep("Consumer Discretionary",3),rep("Consumer Staples",3))
-
-#visualization
-data.frame("Sector" = stocks, "Stocks" = company)
-```
 
 For each stock we have take the closing price from January 1, 2020 till today. Using the function *get_hist_quote* we have taken the closing price and not the adjusted closing price, but if we downloaded data from *"Yahoo! Finance"* and created a dataset we would not have updated data each time we would want to run the code. 
 We have created a list *quotes* in which each element i has *m* closing prices of the i-th stock, *m* is the number of days in which the Stock Market has been opened from January 1, 2020 till today.
@@ -474,59 +482,59 @@ We have created a list *quotes* in which each element i has *m* closing prices o
 Then we have created the data matrix *X* which elements are $x_{t,j} = log(\frac{c_{t,j}}{c_{t-1,j}})$ where t and t-1 are two consecutive days. X has m-1 rows and n columns.
 
 
-```{r statistical}
+```{r}
 
 suppressMessages(require(tseries, quietly = TRUE)) # Load the package
 options("getSymbols.warning4.0" = FALSE) # Stop info-messages to show up
 
 
 #tag of stocks
-company = c("NFLX", "EA", "ATVI", "PSX", "CTRA", "FANG","AAL", "UAL", "LUV", "DPZ", "AMZN", "TSCO", "TAP", "K", "SJM")
+company_1 = c("NFLX", "EA", "ATVI", "PSX", "CTRA", "FANG","AAL", "UAL", "LUV", "DPZ", "AMZN", "TSCO", "TAP", "K", "SJM")
 
-#counter
-c = 0
-
-#number of stocks
-n = length(company)
-
-#list in which each element contains all the closing prices for that stock
-quotes <- list(length = n)
-
-for(i in company){
-  c = c + 1
-  
-  #retrieving the closing price for c-th stock
-  quotes[c] <- list(get.hist.quote(instrument=i, start="2020-01-01",
-                           quote= "Close", provider="yahoo", drop=TRUE))
-  
-}
-
-#number of days in which Stock Market was open from 2020-01-01 till today
-m <- length(quotes[[1]])
-
-#data matrix
-X <- matrix(, nrow = m - 1, ncol = n, dimnames = list(1:(times -1), company))
-
-#rows of data matrix
-r <- c(length = m - 1)
-
-#for each company
-for(j in 1:n){
-  
-  #for each pair of days
-  for(i in 1:(m-1)){
+datamatrix <- function(company){
+  #counter
+  c = 0
+  #number of stocks
+  n = length(company)
+  #list in which each element contains all the closing prices for that stock
+  quotes <- list(length = n)
+  for(i in company){
+    c = c + 1
     
-    #computing the logarithm between two closing price between i+1-th and i-th day of company j-th 
-    r[i] <- log(as.numeric(quotes[[j]][i+1])/as.numeric(quotes[[j]][i]))
+    #retrieving the closing price for c-th stock
+    quotes[c] <- list(get.hist.quote(instrument=i, start="2020-01-01",
+                             quote= "Close", provider="yahoo", drop=TRUE))
+    
   }
-  #fill the data matrix
-  X[,j] <- r
+  #number of days in which Stock Market was open from 2020-01-01 till today
+  m <- length(quotes[[1]])
+  #data matrix
+  X <- matrix(, nrow = m - 1, ncol = n, dimnames = list(1:(m -1), company))
+  #rows of data matrix
+  r <- c(length = m - 1)
+  #for each company
+  for(j in 1:n){
+    
+    #for each pair of days
+    for(i in 1:(m-1)){
+      
+      #computing the logarithm between two closing price between i+1-th and i-th day of company j-th 
+      r[i] <- log(as.numeric(quotes[[j]][i+1])/as.numeric(quotes[[j]][i]))
+    }
+    #fill the data matrix
+    X[,j] <- r
+  }
+  return(X)
 }
+X <- datamatrix(company_1)
 ```
 
+From the data matrix X we have built an adjacency matrix through the function *m_adj*: firstly we compute all possible way to take two stocks. Then we compute through the function *cor.test* an asymptotic Normal-based confidence interval for Pearson-correlation for each couple of stocks i and j and to build the adjacency matrix we put 1 in the position [i,j] and [j,i] if the confidence interval does not include zero, 0 otherwise. 
 
+The function *m_adj* takes in input, in addition to data matrix, also the coverage $(1-\alpha)$ of the CI because we have wanted to study how the adjacency matrix changes varying the coverage of the CI. 
 
-```{r statistical}
+```{r}
+
 m_adj <- function(data, conf){
   #input:
   #data: data matrix
@@ -534,9 +542,12 @@ m_adj <- function(data, conf){
   
   #output:
   #adj: adjacency matrix 
-  
+
   #all possible way to take two stocks
   couples <- CombSet(ncol(data), 2)
+  
+    #number of stocks
+  n = length(colnames(data))
   
   #list of CI for Pearson correlation for each couple of stocks
   corrr <- list()
@@ -549,7 +560,7 @@ m_adj <- function(data, conf){
   }
   
   #initialize the adjacency matrix
-  adj <- matrix(0, nrow = n, ncol = n, dimnames=list(company, company))
+  adj <- matrix(0, nrow = n, ncol = n, dimnames=list(colnames(data), colnames(data)))
   
   #for each couple of stocks
   for(i in 1:nrow(couples)){
@@ -575,15 +586,97 @@ adi_3 = m_adj(X, 0.9)
 adi_4 = m_adj(X, 0.99)
 adi_5 = m_adj(X, 0.9999)
 adi_6 = m_adj(X, 0.999999)
+
+```
+
+After building the adjacency matrix we draw the corresponding graph for each level of alpha that we have chosen. Just looking the graph we have noticed that the more $(1-\alpha)$ is near 1 the less the stocks are connected each other. 
+
+```{r, echo =FALSE}
+
+#just a visualization of the graphs obtained
+
+visualize <- function(adj){
+  #input:
+  #adj: adjacency matrix
+  
+  #output:
+  #plot of the graph
+  
+  #from adjacency matrix to graph
+  grafo <- network(adj)
+  
+  #attribute of the vertex
+  #important for the legend of vertexes'color
+  grafo %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+  
+  #plot of the graph
+  grafo <- ggnet2(grafo, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = colnames(adj), label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+  return(grafo)
+}
+
+#just to visualize contemporarely more graph
+gridExtra::grid.arrange(visualize(adi_1) + ggtitle("alpha = 0.5"), visualize(adi_2) +ggtitle("alpha = 0.7"), nrow = 2)
+gridExtra::grid.arrange(visualize(adi_3) + ggtitle("alpha = 0.9"), visualize(adi_4) +ggtitle("alpha = 0.99"), nrow = 2)
+gridExtra::grid.arrange(visualize(adi_5) + ggtitle("alpha = 0.9999"), visualize(adi_6) +ggtitle("alpha = 0.999999"), nrow = 2)
+```
+
+To look in depth how and which edges are filtered increasing the value of $\alpha$ we have tried to write some visualization and functions. 
+
+Firstly through the function *check* we check if among stocks of the same sector there is always the max number of edges. It has turned out that stocks of the same sector are always linked independently from the level $(1-\alpha)$. So stocks of the same sectors always make a clique! Indeed in each of these graphs there is always a clique of at least size three (number of stocks in a group). This behaviour confirms the hypothesis of the homework's instructions: *"stocks from the same GICS sectors should tend to be clustered together"*. 
+
+Then we have plotted a stacked barplot in which for each sector and for each level of $(1- \alpha)$ we visualize through the height of the bars the number of edges between a sector and all the others. In this way we notice clearly that edges between different sectors are filtered increasing the coverage of CI. The minimum height of a bar is nine. From the graphs and barplot we can think that there are sectors that are similar between them. It seems reasonable that stocks coming from Energy and Industrial are linked together as stocks from Consumer Discretionary and Communication services because maybe they are related in the Market. 
+
+
+```{r}
+check <- function(adj){
+  #input:
+  #adj: adjacency matrix
+  
+  #message to check if CI's of stock in the same group does not include zero
+  c <- 0
+  for(i in seq(1,ncol(adj),3)){
+    if(adj[i,i+1] + adj[i,i+2] + adj[i+1,i+2] == 3){
+      c <- c + 3
+    }else{
+      return("Attention: CI's of stock in the same group include zero")
+    }
+  }
+  if(c == ncol(adj)){
+    return("CI's of stock in the same group does never include zero")
+  }
+}
+
+#check(adi_1)
+#check(adi_2)
+#check(adi_3)
+#check(adi_4)
+#check(adi_5)
+#check(adi_6)
+
+adi_1
+#list of adjacency matrix
 ad <- list(adi_1, adi_2, adi_3, adi_4, adi_5, adi_6)
+
+#vector that will contain the size of the largest clique(s)
+size_click <- c()
+
+#list that contains largest cliques in the graph for each level of alpha
+largest_click <- list()
+t <- graph_from_adjacency_matrix(adi_1, mode = "undirected")
+
+#cluster edge betweenness
+gruppi <- list()
+
+#list that contains cliques with at least 4 vertexes in the graph for each level of alpha
+click <- list()
 
 #counter
 c <- 0
 
-#vector that contains number of edges between a sector and the others
-#first element is the number of edges between Communication Services and other sectors
-#second element is the number of edges between Energy and other sectors and so on
-edge_out = c( length = n / 3)
+frecce <- c()
+
+#vector that will contain number of edges between a sector and the others
+edge_out = c()
 
 #for each adjacency matrix
 for(i in ad){
@@ -592,71 +685,345 @@ for(i in ad){
   #create the graph from adjacency matrix
   t <- graph_from_adjacency_matrix(i, mode = "undirected")
   
+  #calculates the size of the largest clique(s).
+  size_click[c] <- clique_num(t)
+  
+  #argest cliques in the input graph for each level of alpha
+  largest_click[[c]]<- largest.cliques(t)
+  
+  #cliques with at least 4 vertexes in the graph for each level of alpha
+  click[[c]] <- cliques(t, min = 6)
+  
+  gruppi[[c]] <- cluster_edge_betweenness(t)
+  
+  
   #compute the degree for each node
   #-2 because we are interested in number of edges between a stock and stock belonging to other sectors
   #there are always two edges between a stock and the other two stocks belonging to the same sector
   degree_out_group <- degree(t) - 2
-  
+
+  frecce[c] <-  gsize(t)
+  #first element is the number of edges between Communication Services and other sectors
+  #second element is the number of edges between Energy and other sectors and so on
   edge_out <- c(edge_out, sum(degree_out_group[1:3]), sum(degree_out_group[4:6]), sum(degree_out_group[7:9]), sum(degree_out_group[10:12]), sum(degree_out_group[13:15]))
 }
 
+#different values of chosen alpha
+alpha <- c(rep("a=0.5" , 5) , rep("a=0.7" , 5) , rep("a=0.9" , 5) , rep("a=0.99" , 5), rep("a=0.9999" , 5), rep("a=0.999999" , 5))
+
+#chosen sectors
+groups <- rep(c("Comm.Serv", "Energy" , "Industrials", "Cons.Discr","Cons.Staples") , 6)
+
+#number of edges between a sector and the others
+edges_with_other_groups <- edge_out
+
+#dataframe
+data <- data.frame("Different values of alpha" = alpha, groups, "Number of edges with other groups" = edges_with_other_groups)
+
+#visualization
+ggplot(data, aes(fill=groups, y=edges_with_other_groups, x=alpha)) + 
+  geom_bar(position="dodge", stat="identity")+ scale_fill_manual("legend", values = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"))
+adi_1
+gsize(t)
+```
+
+Reading the pdf documentation of *igraph* we have found also the function *cluster_edge_betweenness* that is helpful for community detection:
+*"Many networks consist of modules which are densely connected themselves but sparsely connected to other modules."* This seems exactly our case indeed for $(1-\alpha)$ greater than 0.99 there are two clusters. So using this function we have a confirm that we have two communities in graph with $(1-\alpha)$ = 0.9999: 
+
+```{r,echo=FALSE}
+gruppi[[5]][1]$'1'
+gruppi[[5]][2]$'2'
+```
+
+For each level of alpha that we have chosen we have computed the largest cliques in the graph and their size. In the graph with $(1- \alpha)$ the two clusters are two cliques: the first one is the largest clique, that has size = 7, is:
+ 
+```{r,echo=FALSE}
+largest_click[[5]][[1]]
+```
+
+While the other one is a clique of size = 6: "
+
+```{r,echo=FALSE}
+click[[5]][[2]]
+```
+
+These functions sustain the draw of the graphs. 
+
+Without Consumer Staples the graph is disconnected in two cluster. Instead for alpha smaller than 0.9 all the stocks are more connected each other an for $(1-\alpha)$ = 0.5 the graph is almost fully connected, indeed the largest clique has size 10 and it is: 
+
+```{r, echo = FALSE}
+largest_click[[1]][[1]]
+```
+
+We visualize through a barplot how the size of the largest clique decreases, increasing the coverage $(1-\alpha)$.
+
+```{r}
+f <- c(frecce[1]-frecce[2],frecce[2]-frecce[3],frecce[3]-frecce[4],frecce[4]-frecce[5],frecce[5]-frecce[6])
+data <- data.frame(
+  alpha=c("0.5;0.3","0.3;0.1","0.1;0.01","0.01;0.001","0.0001;0.000001"),  
+  size_clique=f
+  )
+# Barplot
+ggplot(data, aes(x=rev(alpha), y=size_clique)) + 
+  geom_bar(stat = "identity", color="blue", fill=rgb(0.1,0.4,0.5,0.7) )
 ```
 
 
+```{r}
+data <- data.frame(
+  alpha=c("0.5","0.3","0.1","0.01","0.0001","0.000001"),  
+  filtered_edges = frecce - 15
+  )
+# Barplot
+ggplot(data, aes(x=alpha, y=filtered_edges)) + 
+  geom_bar(stat = "identity", color="red", fill = "lightcoral")
+```
 
-```{r, echo =FALSE}
+After having seen how the number of edges changes with $\alpha$ we want to see if taking the same number of stocks from the same sector we obtain the same kind of graph with two clusters. 
 
-statt <- function(adj){
-  c <- 0
-  for(i in seq(1,ncol(adj),3)){
-    if(adj[i,i+1] + adj[i,i+2] + adj[i+1,i+2] == 3){
-      print("Attention: stock in the same group are not correlated!")
-    }else{
-      c <- c + 3
+```{r}
+#new stocks
+company_2 = c("GOOGL", "T", "DISCK", "APA", "BKR", "CVX","ALK", "WM", "UNP", "UAA", "TSLA", "SBUX", "PM", "PEP", "KO")
+
+#new data matrix
+X_2 <- datamatrix(company_2)
+
+#compute different adjacency matrix for different alpha
+adi_7 = m_adj(X_2, 0.5)
+adi_8 = m_adj(X_2, 0.7)
+adi_9 = m_adj(X_2, 0.9)
+adi_10 = m_adj(X_2, 0.99)
+adi_11 = m_adj(X_2, 0.9999)
+adi_12 = m_adj(X_2, 0.999999)
+
+t <- graph_from_adjacency_matrix(adi_7, mode = "undirected")
+paste("The largest clique in the graph with (1 - alpha) = 0.5 has a size of ", clique_num(t))
+
+t <- graph_from_adjacency_matrix(adi_12, mode = "undirected")
+paste("The largest clique in the graph with (1 - alpha) = 0.9999 has a size of ", clique_num(t))
+
+
+#just to visualize contemporarely more graph
+gridExtra::grid.arrange(visualize(adi_7) + ggtitle("alpha = 0.5"), visualize(adi_12) +ggtitle("alpha = 0.999999"), nrow = 2)
+```
+
+We obtain a pretty different results indeed we obtained a graph that is fully connected for $(1 - \alpha) = 0.5$, while in the one with $\alpha$ = 0.999999 just few edges are filtered. So the influence of $\alpha$ is really restrained respect to the stocks that we have chosen initially. 
+
+So we cannot generalize telling for example that stocks from Energy sector are linked to stocks from Industrials, while they are not connected to stocks from Communication services. It seems that the choice of single stocks is crucial. Now we have been curious to see what happens if we chose still three stocks but from the other five sectors. 
+
+```{r}
+company_3 <- c("WFC", "NDAQ", "JPM", "PFE", "CTLT", "JNJ", "EIX", "ATO", "AWK", "ACN", "PYPL", "ORCL", "APD", "IP", "IFF")
+
+#new data matrix
+X_3 <- datamatrix(company_3)
+
+adi_14 <- m_adj(X_3, 0.9999)
+
+#from adjacency matrix to graph
+grafo_14 <- network(adi_14)
+
+t <- graph_from_adjacency_matrix(adi_14, mode = "undirected")
+
+
+paste("The largest clique has a size of ", clique_num(t))
+
+
+#attribute of the vertex
+#important for the legend of vertexes'color
+grafo_14 %v% "GICS" <- c(rep("Financials",3),rep("Health Care",3),rep("Utilities",3),rep("IT",3),rep("Materials",3))
+
+#plot of the graph
+grafo_14 <- ggnet2(grafo_14, color = "GICS", palette = c("Financials" = "purple", "Health Care" = "steelblue", "Utilities" = "gray", "IT"="salmon", "Materials" = "green"),label = colnames(adi_14), label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+grafo_14
+
+```
+
+Also with the other five sectors we obtained a graph that is almost fully connected for each level $\alpha$ so we can conclude that it is true that stocks from the same GICS sectors are clustered together, but they interact a lot, almost in the same way, also with stocks of other sectors. Just in the first portfolio we have seen a strong separation between stocks of different sectors, but this is due to the singular stocks that we have chosen because with other stocks of the same sectors this separation does not exist anymore. While in the other cases all the stocks seem related each other. We have thought that this behaviour could be due to Covid-19, that is a phenomenon that has damaged all the sectors indiscriminately and so in this way it could have linked all together. Maybe just few companies differentiate from the others. 
+
+```{r}
+#BOOTSTRAP
+#all possible way to take two stocks
+couples <- CombSet(nrow(X),2)
+
+
+bootstrapp <- function(stockk, weight){
+  #input:
+  
+  #stockk: stock that we have take into consideration to Shapley
+  #weight: weight that we have chosen
+  
+  #output:
+  #btheta: approximation of shapley value
+  
+  #number of resampling
+  B <- 300
+  
+  n = 15
+  
+  #stocks
+  vec_stok <- seq(1,n)
+
+  #initialization for the mean
+  btheta_media <- rep(NA, B)
+  
+  #initialization for the Shapley initialization
+  btheta <- rep(NA, B)
+  
+  
+  for (b in 1:B){
+    
+    #we resample the index of the rows
+    idx <- sample (1:(nrow(X)-1), replace = T)
+    
+    #matrix bsamp that has the same dimension of X, rows will change
+    bsamp <- matrix(, nrow = nrow(X) - 1, ncol = n, dimnames = list(1:(nrow(X) -1), colnames(X)))
+    
+    #for each column
+    for(j in 1:n){
+      
+      #new column 
+      bsamp[,j] <- X[idx,j]
+      
     }
+    
+    #approximation of the mean
+    btheta_media[b] <- mean(bsamp[,stockk])
+    
+    #initialization of the sum of the covariances 
+    covar <- 0
+    
+    #for each stock 
+    for(k in vec_stok){
+      
+      #computing the sum of the covariances 
+      covar <- covar + cov(bsamp[,stockk],  bsamp[,k])
+    }
+    
+    #computing the approximation of shapley value
+    btheta[b] <- btheta_media[b] - weight * covar
+  }
+  
+  
+  return(btheta)
+}
+
+
+CI_quantile <- function(alpha, weight){
+  q_boot <- list()
+  for(i in 1:n){
+    q_boot[[i]]<- quantile(bootstrapp(i,weight),c(alpha/2, 1-alpha/2))
+  }
+  return(q_boot)
+}
+
+n= ncol(X)
+
+shapley_hat <- function(weight){
+  
+  #input:
+  #weight: chosen weight
+  
+  #output:
+  #approximation of the Shapley values
+  
+  #initialization 
+  shapley <- c(length = 15)
+  
+  for(i in 1:n){
+    
+    #mean of the column
+    media <- mean(X[,i])
+    
+    covar <- 0
+    for(j in seq(1,n)){
+      
+      #sum of the covariances
+      covar <- covar + cov(X[,i],X[,j])
+    }
+    
+    #approximation of the shapley
+    shapley[i] <- media - weight * covar 
+  }
+  return(shapley)
+}
+
+
+#vector of chosen alpha
+alpha <- c(0.05, 0.01, 0.0001)
+
+#vector of chosen weights
+weightss <- c(0.1, 0.5, 2)
+
+#list of CI 
+ci <- list()
+
+#counter
+c <- 0
+
+#for each chosen alpha
+for(i in alpha){
+  
+  #for each chosen weights
+  for(j in weightss){
+    
+        c <- c +1
+        
+        #computing the CI
+        ci[[c]] <- CI_quantile(i, j)
   }
 }
 
-g_1 <- network(adi_1)
-g_1 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
-t_1 <- ggnet2(g_1, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+#shapley hat
+s_1 <- shapley_hat(weightss[1])
+s_2 <- shapley_hat(weightss[2])
+s_3 <- shapley_hat(weightss[3])
 
-g_2 <- network(adi_2)
-g_2 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
-t_2 <- ggnet2(g_2, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
-
-g_3 <- network(adi_3)
-g_3 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
-t_3 <- ggnet2(g_3, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
-
-g_4 <- network(adi_4)
-g_4 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
-t_4 <- ggnet2(g_4, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
-
-g_5 <- network(adi_5)
-g_5 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
-t_5 <- ggnet2(g_5, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
-
-
-g_6 <- network(adi_6)
-g_6 %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
-t_6 <- ggnet2(g_6, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = company, label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
-
-
-gridExtra::grid.arrange(t_1 + ggtitle("alpha = 0.5"), t_2 +ggtitle("alpha = 0.7"), nrow = 2)
-gridExtra::grid.arrange(t_3 + ggtitle("alpha = 0.9"), t_4 +ggtitle("alpha = 0.99"), nrow = 2)
-gridExtra::grid.arrange(t_5 + ggtitle("alpha = 0.9999"), t_6 +ggtitle("alpha = 0.999999"), nrow = 2)
-
-
-alpha <- c(rep("a=0.5" , 5) , rep("a=0.7" , 5) , rep("a=0.9" , 5) , rep("a=0.99" , 5), rep("a=0.9999" , 5), rep("a=0.999999" , 5))
-groups <- rep(c("Comm.Serv", "Energy" , "Industrials", "Cons.Discr","Cons.Staples") , 6)
-edges_with_other_groups <- edge_out
-data <- data.frame("Different values of alpha" = alpha, groups, "Number of edges with other groups" = edges_with_other_groups)
-
-# Grouped
-
-ggplot(data, aes(fill=groups, y=edges_with_other_groups, x=alpha)) + 
-  geom_bar(position="dodge", stat="identity")+ scale_fill_manual("legend", values = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"))
-
+#ci for difference alpha and weights
+ci_a1_w1 <- unlist(ci[[1]])
+ci_a1_w2 <- unlist(ci[[2]])
+ci_a1_w3 <- unlist(ci[[3]])
+ci_a2_w1 <- unlist(ci[[4]])
+ci_a2_w2 <- unlist(ci[[5]])
+ci_a2_w3 <- unlist(ci[[6]])
+ci_a3_w1 <- unlist(ci[[7]])
+ci_a3_w2 <- unlist(ci[[8]])
+ci_a3_w3 <- unlist(ci[[9]])
 
 ```
+
+
+
+
+```{r}
+#plot weight = 0.1
+
+plotCI(1:15, s_1, ui = ci_a1_w1[seq(2,length(ci_a1_w1),2)], li = ci_a1_w1[seq(1,length(ci_a1_w1),2)], col = "red",xlab ="Vertex", ylab = "CI", lwd= 2,ylim = c(-0.013, 0.01), main ="CI for weight = 0.1")
+
+plotCI(1:15, s_1, ui = ci_a2_w1[seq(2,length(ci_a2_w1),2)], li = ci_a2_w1[seq(1,length(ci_a2_w1),2)], col = "blue", add = TRUE, lwd= 2,ylim = c(-0.013, 0.01))
+
+plotCI(1:15, s_1, ui = ci_a3_w1[seq(2,length(ci_a3_w1),2)], li = ci_a3_w1[seq(1,length(ci_a3_w1),2)], col = "black", add = TRUE, lwd= 2, ylim = c(-0.013, 0.01))
+```
+
+
+
+```{r}
+#plot weight = 0.5
+
+plotCI(1:15, s_2, ui = ci_a1_w2[seq(2,length(ci_a1_w2),2)], li = ci_a1_w2[seq(1,length(ci_a1_w2),2)], col = "red",xlab ="Vertex", ylab = "CI", lwd= 2,ylim = c(-0.019, 0.007), main ="CI for weight = 0.5")
+
+plotCI(1:15, s_2, ui = ci_a2_w2[seq(2,length(ci_a2_w2),2)], li = ci_a2_w2[seq(1,length(ci_a2_w2),2)], col = "blue", add = TRUE, lwd= 2,ylim = c(-0.019, 0.007))
+
+plotCI(1:15, s_2, ui = ci_a3_w2[seq(2,length(ci_a3_w2),2)], li = ci_a3_w2[seq(1,length(ci_a3_w2),2)], col = "black", add = TRUE, lwd= 2, ylim = c(-0.019, 0.007))
+```
+
+```{r}
+#plot weight = 2
+
+plotCI(1:15, s_3, ui = ci_a1_w3[seq(2,length(ci_a1_w3),2)], li = ci_a1_w3[seq(1,length(ci_a1_w3),2)], col = "red",xlab ="Vertex", ylab = "CI", lwd= 2,ylim = c(-0.05, 0.02), main ="CI for weight = 2")
+
+plotCI(1:15, s_3, ui = ci_a2_w3[seq(2,length(ci_a2_w3),2)], li = ci_a2_w3[seq(1,length(ci_a2_w3),2)], col = "blue", add = TRUE, lwd= 2, ylim = c(-0.05, 0.04))
+
+plotCI(1:15, s_3, ui = ci_a3_w3[seq(2,length(ci_a3_w3),2)], li = ci_a3_w3[seq(1,length(ci_a3_w3),2)], col = "black", add = TRUE, lwd= 2, ylim = c(-0.05, 0.04))
+
+```
+
