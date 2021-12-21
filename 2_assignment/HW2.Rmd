@@ -44,11 +44,11 @@ $$ \Delta_{\pi}^{G}(j) = \nu(S_{\pi}(j) \cup \{j\}) - \nu(S_{\pi}(j))$$
 We will now have to tackle calculate the various payoffs in each permutation of $A,B,C$. Let us start:
 $$\\[.5cm]$$
 
-<table style="margin-left:auto; margin-right:auto;">
+<table>
 <tr>
 <td>
 * **ABC**
-  - $\nu(A) = \nu(\emptyset \cup A) - \nu(\emptyset) = 0$ 
+  - $\nu(A) = \nu(\emptyset \cup A) - \nu(\emptyset) = 0$
   - $\nu(B) = \nu(A \cup B) - \nu(A) = 2$
   - $\nu(C) = \nu(AB \cup C) - \nu(AB) = 2$
 </td>
@@ -91,22 +91,21 @@ $$\\[.5cm]$$
 </tr>
 
 </table>
-</div>
 
 $$\\[1cm]$$
 
-Finally, we can put everything in this more readable table: 
+Finally, we can put everything in this more readable table:
 
 
-<div style = "width:40%; margin-left:30%;">
-| Permutation | $\nu(A)$ | $\nu(B)$ | $\nu(C)$| 
-| ----------: | :------: | :------: | :------:| 
-|     ABC     |    0     |    2     |     2   | 
-|     ACB     |    0     |    4     |     0   | 
-|     BAC     |    2     |    0     |     2   | 
-|     BCA     |    2     |    0     |     2   | 
-|     CAB     |    0     |    4     |     0   | 
-|     CBA     |    2     |    2     |     0   | 
+<div style = "margin-left:30%;">
+| Permutation | $\nu(A)$ | $\nu(B)$ | $\nu(C)$|
+| ----------: | :------: | :------: | :------:|
+|     ABC     |    0     |    2     |     2   |
+|     ACB     |    0     |    4     |     0   |
+|     BAC     |    2     |    0     |     2   |
+|     BCA     |    2     |    0     |     2   |
+|     CAB     |    0     |    4     |     0   |
+|     CBA     |    2     |    2     |     0   |
 |  **Total**  |  **6**   |  **12**  |  **6**  |
 </div>
 
@@ -124,6 +123,8 @@ Using the definition above:
 $$\psi(A) + \psi(B) + \psi(C) = \nu(ABC) = 4$$
 
 So the efficiency is respected, as their sum is 4 and equal to $\nu(ABC)$.
+
+\pagebreak
 
 ## 2. Probabilistic
 
