@@ -97,7 +97,7 @@ $$\\[1cm]$$
 Finally, we can put everything in this more readable table:
 
 
-<div style = "margin-left:30%;">
+<div style = "margin-left:30%; margin-right:30%;">
 | Permutation | $\nu(A)$ | $\nu(B)$ | $\nu(C)$|
 | ----------: | :------: | :------: | :------:|
 |     ABC     |    0     |    2     |     2   |
@@ -137,7 +137,7 @@ Firstly the function has to compute the simulation size M, to do it we have comp
 Through the function *sample* we are able to pick different permutations of the team members and for each of them we compute the marginal contribution of the chosen player with respect to that permutation. (We identify the position in the permutation of our player, truncated the permutation at his position, compute the characteristic function of coalitions with and without our player and make the difference between them.) If the chosen player is in the first place of the permutation his marginal contribution is zero. Eventually we take the mean of all marginal contribution computed in each simulation, that is our approximation of the Shapley payoff for the chosen player.
 
 ```{r}
-load("~/Desktop/char_fun.RData")
+load("./char_fun.RData")
 value <- function(team_member, eps, alpha){
   #input:
   #team_member: an integer that represent the player that we want to study
@@ -530,52 +530,52 @@ datamatrix <- function(company){
 X <- datamatrix(company_1)
 ```
 
-From the data matrix X we have built an adjacency matrix through the function *m_adj*: firstly we compute all possible way to take two stocks. Then we compute through the function *cor.test* an asymptotic Normal-based confidence interval for Pearson-correlation for each couple of stocks i and j and to build the adjacency matrix we put 1 in the position [i,j] and [j,i] if the confidence interval does not include zero, 0 otherwise. 
+From the data matrix X we have built an adjacency matrix through the function *m_adj*: firstly we compute all possible way to take two stocks. Then we compute through the function *cor.test* an asymptotic Normal-based confidence interval for Pearson-correlation for each couple of stocks i and j and to build the adjacency matrix we put 1 in the position [i,j] and [j,i] if the confidence interval does not include zero, 0 otherwise.
 
-The function *m_adj* takes in input, in addition to data matrix, also the coverage $(1-\alpha)$ of the CI because we have wanted to study how the adjacency matrix changes varying the coverage of the CI. 
+The function *m_adj* takes in input, in addition to data matrix, also the coverage $(1-\alpha)$ of the CI because we have wanted to study how the adjacency matrix changes varying the coverage of the CI.
 
 ```{r}
 
 m_adj <- function(data, conf){
   #input:
   #data: data matrix
-  #conf: alpha for confidence interval 
-  
+  #conf: alpha for confidence interval
+
   #output:
-  #adj: adjacency matrix 
+  #adj: adjacency matrix
 
   #all possible way to take two stocks
   couples <- CombSet(ncol(data), 2)
-  
+
     #number of stocks
   n = length(colnames(data))
-  
+
   #list of CI for Pearson correlation for each couple of stocks
   corrr <- list()
-  
+
   #for each couple of stocks
   for(i in 1: nrow(couples)){
-    
+
     #compute CI for Pearson correlation for i-th couple of stock
     corrr[i] <- list(cor.test(data[,couples[i,1]], data[,couples[i,2]], method = "pearson", conf.level = conf)$conf.int)
   }
-  
+
   #initialize the adjacency matrix
   adj <- matrix(0, nrow = n, ncol = n, dimnames=list(colnames(data), colnames(data)))
-  
+
   #for each couple of stocks
   for(i in 1:nrow(couples)){
-    
+
     #check if the extremes of CI are concordant
     if((corrr[[i]][1] * corrr[[i]][2] > 0)){
-      
+
       #we put an edge if CI does not include zero
       #adjacency matrix is symmetric
       adj[couples[i,1],couples[i,2]] <- 1
       adj[couples[i,2],couples[i,1]] <- 1
     }
   }
-  
+
   #adjacency matrix
   return(adj)
 }
@@ -590,7 +590,7 @@ adi_6 = m_adj(X, 0.999999)
 
 ```
 
-After building the adjacency matrix we draw the corresponding graph for each level of alpha that we have chosen. Just looking the graph we have noticed that the more $(1-\alpha)$ is near 1 the less the stocks are connected each other. 
+After building the adjacency matrix we draw the corresponding graph for each level of alpha that we have chosen. Just looking the graph we have noticed that the more $(1-\alpha)$ is near 1 the less the stocks are connected each other.
 
 ```{r, echo =FALSE}
 
@@ -599,17 +599,17 @@ After building the adjacency matrix we draw the corresponding graph for each lev
 visualize <- function(adj){
   #input:
   #adj: adjacency matrix
-  
+
   #output:
   #plot of the graph
-  
+
   #from adjacency matrix to graph
   grafo <- network(adj)
-  
+
   #attribute of the vertex
   #important for the legend of vertexes'color
   grafo %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
-  
+
   #plot of the graph
   grafo <- ggnet2(grafo, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = colnames(adj), label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
   return(grafo)
@@ -621,18 +621,18 @@ gridExtra::grid.arrange(visualize(adi_3) + ggtitle("alpha = 0.9"), visualize(adi
 gridExtra::grid.arrange(visualize(adi_5) + ggtitle("alpha = 0.9999"), visualize(adi_6) +ggtitle("alpha = 0.999999"), nrow = 2)
 ```
 
-To look in depth how and which edges are filtered increasing the value of $\alpha$ we have tried to write some visualization and functions. 
+To look in depth how and which edges are filtered increasing the value of $\alpha$ we have tried to write some visualization and functions.
 
-Firstly through the function *check* we check if among stocks of the same sector there is always the max number of edges. It has turned out that stocks of the same sector are always linked independently from the level $(1-\alpha)$. So stocks of the same sectors always make a clique! Indeed in each of these graphs there is always a clique of at least size three (number of stocks in a group). This behaviour confirms the hypothesis of the homework's instructions: *"stocks from the same GICS sectors should tend to be clustered together"*. 
+Firstly through the function *check* we check if among stocks of the same sector there is always the max number of edges. It has turned out that stocks of the same sector are always linked independently from the level $(1-\alpha)$. So stocks of the same sectors always make a clique! Indeed in each of these graphs there is always a clique of at least size three (number of stocks in a group). This behaviour confirms the hypothesis of the homework's instructions: *"stocks from the same GICS sectors should tend to be clustered together"*.
 
-Then we have plotted a stacked barplot in which for each sector and for each level of $(1- \alpha)$ we visualize through the height of the bars the number of edges between a sector and all the others. In this way we notice clearly that edges between different sectors are filtered increasing the coverage of CI. The minimum height of a bar is nine. From the graphs and barplot we can think that there are sectors that are similar between them. It seems reasonable that stocks coming from Energy and Industrial are linked together as stocks from Consumer Discretionary and Communication services because maybe they are related in the Market. 
+Then we have plotted a stacked barplot in which for each sector and for each level of $(1- \alpha)$ we visualize through the height of the bars the number of edges between a sector and all the others. In this way we notice clearly that edges between different sectors are filtered increasing the coverage of CI. The minimum height of a bar is nine. From the graphs and barplot we can think that there are sectors that are similar between them. It seems reasonable that stocks coming from Energy and Industrial are linked together as stocks from Consumer Discretionary and Communication services because maybe they are related in the Market.
 
 
 ```{r}
 check <- function(adj){
   #input:
   #adj: adjacency matrix
-  
+
   #message to check if CI's of stock in the same group does not include zero
   c <- 0
   for(i in seq(1,ncol(adj),3)){
@@ -682,22 +682,22 @@ edge_out = c()
 #for each adjacency matrix
 for(i in ad){
   c <- c + 1
-  
+
   #create the graph from adjacency matrix
   t <- graph_from_adjacency_matrix(i, mode = "undirected")
-  
+
   #calculates the size of the largest clique(s).
   size_click[c] <- clique_num(t)
-  
+
   #argest cliques in the input graph for each level of alpha
   largest_click[[c]]<- largest.cliques(t)
-  
+
   #cliques with at least 4 vertexes in the graph for each level of alpha
   click[[c]] <- cliques(t, min = 6)
-  
+
   gruppi[[c]] <- cluster_edge_betweenness(t)
-  
-  
+
+
   #compute the degree for each node
   #-2 because we are interested in number of edges between a stock and stock belonging to other sectors
   #there are always two edges between a stock and the other two stocks belonging to the same sector
@@ -722,14 +722,14 @@ edges_with_other_groups <- edge_out
 data <- data.frame("Different values of alpha" = alpha, groups, "Number of edges with other groups" = edges_with_other_groups)
 
 #visualization
-ggplot(data, aes(fill=groups, y=edges_with_other_groups, x=alpha)) + 
+ggplot(data, aes(fill=groups, y=edges_with_other_groups, x=alpha)) +
   geom_bar(position="dodge", stat="identity")+ scale_fill_manual("legend", values = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"))
 adi_1
 gsize(t)
 ```
 
 Reading the pdf documentation of *igraph* we have found also the function *cluster_edge_betweenness* that is helpful for community detection:
-*"Many networks consist of modules which are densely connected themselves but sparsely connected to other modules."* This seems exactly our case indeed for $(1-\alpha)$ greater than 0.99 there are two clusters. So using this function we have a confirm that we have two communities in graph with $(1-\alpha)$ = 0.9999: 
+*"Many networks consist of modules which are densely connected themselves but sparsely connected to other modules."* This seems exactly our case indeed for $(1-\alpha)$ greater than 0.99 there are two clusters. So using this function we have a confirm that we have two communities in graph with $(1-\alpha)$ = 0.9999:
 
 ```{r,echo=FALSE}
 gruppi[[5]][1]$'1'
@@ -737,7 +737,7 @@ gruppi[[5]][2]$'2'
 ```
 
 For each level of alpha that we have chosen we have computed the largest cliques in the graph and their size. In the graph with $(1- \alpha)$ the two clusters are two cliques: the first one is the largest clique, that has size = 7, is:
- 
+
 ```{r,echo=FALSE}
 largest_click[[5]][[1]]
 ```
@@ -748,9 +748,9 @@ While the other one is a clique of size = 6: "
 click[[5]][[2]]
 ```
 
-These functions sustain the draw of the graphs. 
+These functions sustain the draw of the graphs.
 
-Without Consumer Staples the graph is disconnected in two cluster. Instead for alpha smaller than 0.9 all the stocks are more connected each other an for $(1-\alpha)$ = 0.5 the graph is almost fully connected, indeed the largest clique has size 10 and it is: 
+Without Consumer Staples the graph is disconnected in two cluster. Instead for alpha smaller than 0.9 all the stocks are more connected each other an for $(1-\alpha)$ = 0.5 the graph is almost fully connected, indeed the largest clique has size 10 and it is:
 
 ```{r, echo = FALSE}
 largest_click[[1]][[1]]
@@ -761,26 +761,26 @@ We visualize through a barplot how the size of the largest clique decreases, inc
 ```{r}
 f <- c(frecce[1]-frecce[2],frecce[2]-frecce[3],frecce[3]-frecce[4],frecce[4]-frecce[5],frecce[5]-frecce[6])
 data <- data.frame(
-  alpha=c("0.5;0.3","0.3;0.1","0.1;0.01","0.01;0.001","0.0001;0.000001"),  
+  alpha=c("0.5;0.3","0.3;0.1","0.1;0.01","0.01;0.001","0.0001;0.000001"),
   size_clique=f
   )
 # Barplot
-ggplot(data, aes(x=rev(alpha), y=size_clique)) + 
+ggplot(data, aes(x=rev(alpha), y=size_clique)) +
   geom_bar(stat = "identity", color="blue", fill=rgb(0.1,0.4,0.5,0.7) )
 ```
 
 
 ```{r}
 data <- data.frame(
-  alpha=c("0.5","0.3","0.1","0.01","0.0001","0.000001"),  
+  alpha=c("0.5","0.3","0.1","0.01","0.0001","0.000001"),
   filtered_edges = frecce - 15
   )
 # Barplot
-ggplot(data, aes(x=alpha, y=filtered_edges)) + 
+ggplot(data, aes(x=alpha, y=filtered_edges)) +
   geom_bar(stat = "identity", color="red", fill = "lightcoral")
 ```
 
-After having seen how the number of edges changes with $\alpha$ we want to see if taking the same number of stocks from the same sector we obtain the same kind of graph with two clusters. 
+After having seen how the number of edges changes with $\alpha$ we want to see if taking the same number of stocks from the same sector we obtain the same kind of graph with two clusters.
 
 ```{r}
 #new stocks
@@ -808,9 +808,9 @@ paste("The largest clique in the graph with (1 - alpha) = 0.9999 has a size of "
 gridExtra::grid.arrange(visualize(adi_7) + ggtitle("alpha = 0.5"), visualize(adi_12) +ggtitle("alpha = 0.999999"), nrow = 2)
 ```
 
-We obtain a pretty different results indeed we obtained a graph that is fully connected for $(1 - \alpha) = 0.5$, while in the one with $\alpha$ = 0.999999 just few edges are filtered. So the influence of $\alpha$ is really restrained respect to the stocks that we have chosen initially. 
+We obtain a pretty different results indeed we obtained a graph that is fully connected for $(1 - \alpha) = 0.5$, while in the one with $\alpha$ = 0.999999 just few edges are filtered. So the influence of $\alpha$ is really restrained respect to the stocks that we have chosen initially.
 
-So we cannot generalize telling for example that stocks from Energy sector are linked to stocks from Industrials, while they are not connected to stocks from Communication services. It seems that the choice of single stocks is crucial. Now we have been curious to see what happens if we chose still three stocks but from the other five sectors. 
+So we cannot generalize telling for example that stocks from Energy sector are linked to stocks from Industrials, while they are not connected to stocks from Communication services. It seems that the choice of single stocks is crucial. Now we have been curious to see what happens if we chose still three stocks but from the other five sectors.
 
 ```{r}
 company_3 <- c("WFC", "NDAQ", "JPM", "PFE", "CTLT", "JNJ", "EIX", "ATO", "AWK", "ACN", "PYPL", "ORCL", "APD", "IP", "IFF")
@@ -839,7 +839,7 @@ grafo_14
 
 ```
 
-Also with the other five sectors we obtained a graph that is almost fully connected for each level $\alpha$ so we can conclude that it is true that stocks from the same GICS sectors are clustered together, but they interact a lot, almost in the same way, also with stocks of other sectors. Just in the first portfolio we have seen a strong separation between stocks of different sectors, but this is due to the singular stocks that we have chosen because with other stocks of the same sectors this separation does not exist anymore. While in the other cases all the stocks seem related each other. We have thought that this behaviour could be due to Covid-19, that is a phenomenon that has damaged all the sectors indiscriminately and so in this way it could have linked all together. Maybe just few companies differentiate from the others. 
+Also with the other five sectors we obtained a graph that is almost fully connected for each level $\alpha$ so we can conclude that it is true that stocks from the same GICS sectors are clustered together, but they interact a lot, almost in the same way, also with stocks of other sectors. Just in the first portfolio we have seen a strong separation between stocks of different sectors, but this is due to the singular stocks that we have chosen because with other stocks of the same sectors this separation does not exist anymore. While in the other cases all the stocks seem related each other. We have thought that this behaviour could be due to Covid-19, that is a phenomenon that has damaged all the sectors indiscriminately and so in this way it could have linked all together. Maybe just few companies differentiate from the others.
 
 ```{r}
 #BOOTSTRAP
@@ -849,62 +849,62 @@ couples <- CombSet(nrow(X),2)
 
 bootstrapp <- function(stockk, weight){
   #input:
-  
+
   #stockk: stock that we have take into consideration to Shapley
   #weight: weight that we have chosen
-  
+
   #output:
   #btheta: approximation of shapley value
-  
+
   #number of resampling
   B <- 300
-  
+
   n = 15
-  
+
   #stocks
   vec_stok <- seq(1,n)
 
   #initialization for the mean
   btheta_media <- rep(NA, B)
-  
+
   #initialization for the Shapley initialization
   btheta <- rep(NA, B)
-  
-  
+
+
   for (b in 1:B){
-    
+
     #we resample the index of the rows
     idx <- sample (1:(nrow(X)-1), replace = T)
-    
+
     #matrix bsamp that has the same dimension of X, rows will change
     bsamp <- matrix(, nrow = nrow(X) - 1, ncol = n, dimnames = list(1:(nrow(X) -1), colnames(X)))
-    
+
     #for each column
     for(j in 1:n){
-      
-      #new column 
+
+      #new column
       bsamp[,j] <- X[idx,j]
-      
+
     }
-    
+
     #approximation of the mean
     btheta_media[b] <- mean(bsamp[,stockk])
-    
-    #initialization of the sum of the covariances 
+
+    #initialization of the sum of the covariances
     covar <- 0
-    
-    #for each stock 
+
+    #for each stock
     for(k in vec_stok){
-      
-      #computing the sum of the covariances 
+
+      #computing the sum of the covariances
       covar <- covar + cov(bsamp[,stockk],  bsamp[,k])
     }
-    
+
     #computing the approximation of shapley value
     btheta[b] <- btheta_media[b] - weight * covar
   }
-  
-  
+
+
   return(btheta)
 }
 
@@ -920,30 +920,30 @@ CI_quantile <- function(alpha, weight){
 n= ncol(X)
 
 shapley_hat <- function(weight){
-  
+
   #input:
   #weight: chosen weight
-  
+
   #output:
   #approximation of the Shapley values
-  
-  #initialization 
+
+  #initialization
   shapley <- c(length = 15)
-  
+
   for(i in 1:n){
-    
+
     #mean of the column
     media <- mean(X[,i])
-    
+
     covar <- 0
     for(j in seq(1,n)){
-      
+
       #sum of the covariances
       covar <- covar + cov(X[,i],X[,j])
     }
-    
+
     #approximation of the shapley
-    shapley[i] <- media - weight * covar 
+    shapley[i] <- media - weight * covar
   }
   return(shapley)
 }
@@ -955,7 +955,7 @@ alpha <- c(0.05, 0.01, 0.0001)
 #vector of chosen weights
 weightss <- c(0.1, 0.5, 2)
 
-#list of CI 
+#list of CI
 ci <- list()
 
 #counter
@@ -963,12 +963,12 @@ c <- 0
 
 #for each chosen alpha
 for(i in alpha){
-  
+
   #for each chosen weights
   for(j in weightss){
-    
+
         c <- c +1
-        
+
         #computing the CI
         ci[[c]] <- CI_quantile(i, j)
   }
