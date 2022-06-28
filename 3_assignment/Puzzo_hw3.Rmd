@@ -1,0 +1,1005 @@
+---
+title: "Homework3"
+output: html_document
+author: "Puzzo"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("clrdag")
+library("readxl")
+library("bestNormalize")
+```
+
+## ToDo List point 2
+
+We have to implement as universal test the *Split Likelihood Ratio* and the *Cross-Fit Likelihood Ratio* for the problem of testing **graph linkages** and **directed pathway**. In this case the vector valued parameter $\mathbf{\theta}$ is made by two elements: ($\textrm{A}$, $\sigma^2$).
+
+We have looked at page 5, left column, of paper *Likelihood Ratio Tests for a Large Directed Acyclic Graph* to find the expression for $\sigma^2 = (np)^{-1} \sum_{j=1}^p\sum_{i=1}^n(y_{ij} - \sum_{k \neq j} y_{ik} U_{jk})^2$.
+
+Then we have installed the package *crldag* to use the function *MLEdag()* to estimate the adjacency matrix $\textrm{A}$.
+
+From the instructions of the homework we have taken the formula for log-likelihood:
+$\ell_n(\textrm{A}, \sigma^2) \propto  -\sum_{j=1}^p\left(\frac{1}{2\sigma^2}\sum_{i=1}^n(\textrm{X}[i,j] - \sum_{k:k \neq j} \textrm{A}[j,k] \cdot \textrm{X}[i,k])^2 + \frac{n}{2}ln\sigma^2 \right)$.
+
+We have implemented a function to compute $\sigma^2$ and one for $\ell_n(\textrm{A}, \sigma^2)$.
+
+```{r}
+sigmaquad <- function(X, A){
+  #input:
+  #X: data matrix
+  #A: adjacency matrix
+  
+  #output: squared sigma
+  
+  #observations
+  n <- nrow(X)
+  
+  #features
+  p <- ncol(X)
+
+  #counter for the two summation
+  temp <- 0
+  
+  #first sum
+  for(j in 1:p){
+    
+    #second sum
+    for(i in 1:n){
+      
+      #counter for the term in third sum
+      c <- 0
+      
+      #third sum
+      for(k in 1:p){
+        
+        #condition index of third sum
+        if(k != j){
+          
+          #expression of third summation
+          c <- c + X[i,k] * A[j,k] 
+        }
+      }
+      
+      temp <- temp + (X[i,j] - c)^2
+    }
+  }
+  
+  #squared sigma
+  return((1/(n * p)) * temp)
+}
+
+loglike <- function(X, A, sig){
+  #input:
+  #X: data matrix
+  #A: adjacency matrix
+  
+  #output: log likelihood
+  
+  #observations
+  n <- nrow(X)
+  
+  #features
+  p <- ncol(X)
+  
+  #counter for the first summation
+  c1 <- 0 
+  
+  #first sum
+  for(j in 1:p){
+    
+    #counter for the second summation
+    c2 <- 0
+    
+    #second sum
+    for(i in 1:n){
+      
+      #counter for the third summation
+      c3 <- 0
+      
+      #third sum
+      for(k in 1:p){
+        
+        #condition for the third sum
+        if(k != j){
+          
+          #expression of the third sum
+          c3 <- c3 + A[j,k] * X[i,k]
+        }
+      }
+      
+      #expression of the second sum
+      c2 = c2 + (X[i,j] - c3)^2
+    }
+    
+    #expression of the first sum
+    c1 <- c1 + (1/(2 * sig)) * c2 + (n/2)*log(sig)
+  }
+  
+  #log likelihood
+  return(-c1)
+}
+```
+To implement an Universal test we have to split the data in two groups, training and test set, having the same size n.
+
+In Split Likelihood Ratio we have $U_n=\frac{\mathcal{L}(\mathbf{\hat\theta^{Te}}|D_n^{Tr})}{\mathcal{L}(\mathbf{\hat\theta^{Tr}_0}|D_n^{Tr})}$ where $\mathbf{\hat\theta}$ is the vector ($\hat{A},\hat\sigma^2$) where they are the unconstrained MLEs, while $\mathbf{\hat\theta}_0$ is the vector ($\hat{A}_0,\hat\sigma^2_0$) made by $H_0$-constrained MLEs.
+On the other hand in Cross-Fit Likelihood Ratio we have $U_n=\frac{\mathcal{L}(\mathbf{\hat\theta^{Te}}|D_n^{Te})}{\mathcal{L}(\mathbf{\hat\theta^{Tr}_0}|D_n^{Te})}$ where $\mathbf{\hat\theta}$, we have just swapped $D_n^{Tr}$ with $D_n^{Te}$.
+
+Since we work with the log-likelihood the Universal test is equal to the difference of the log-likelihood for the logarithm properties.
+
+The numerator for test of Graph Linkages and test of Directed Pathway is the same, while denominator is different. Firstly we focus on test of Graph Linkages.
+
+#### Test of Graph Linkages
+
+We have written three function, *linkages_split* for Split Likelihood Test, *linkages_crossfit* and *W_n* for Cross-Fit Likelihood Test.
+
+When we have to compute $\hat{A}$, the unconstrained MLE, we choose as output of *MLEdag()*, *A.H1* while when we need $\hat{A}_0$, the $H_0$-constrained MLE, we choose as output of *MLEdag()*, *A.H0*.
+
+```{r}
+linkages_split <- function(X_1, f, sparsity = 1){
+  #input:
+  #X_1: data_matrix
+  #f: matrix of constraint
+  #sparsity: tuning parameter
+  
+  #output:
+  #U_link: universal test
+  
+  #rows of X_1
+  n <- nrow(X_1)
+  
+  #choosing the rows of training set
+  #Using ceiling because n can be odd, in this way train has a row more
+  train_ind <- sort(sample(1:n, size = ceiling(n/2)))
+  
+  #indexing the data matrix to extract rows for training set
+  train_X <- X_1[train_ind,]
+  
+  #indexing the data matrix to extract rows for test set
+  test_X <- X_1[-train_ind,]
+
+  #Unconstrained MLE for adjacency matrix A using test set
+  test_A <- MLEdag(X = test_X, D = f,tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A.H1
+  
+  #Unconstrained MLE for squared sigma using test set
+  test_sig <- sigmaquad(test_X, test_A)
+  
+  #Numerator of the split likelihood ratio 
+  loglike_num <- loglike(train_X, test_A, test_sig)
+  
+  #Constrained MLE for adjacency matrix A using train set
+  train_A0 <- MLEdag(X = train_X, D = f, tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A.H0
+  
+  #Constrained MLE for squared sigma using train set
+  train_sig0 <- sigmaquad(train_X, train_A0)
+  
+  #Denominator of the split likelihood ratio for Graph linkage
+  loglike_den_link <- loglike(train_X, train_A0, train_sig0)
+  
+  #Universal test for graph linkage
+  U_link <- loglike_num - loglike_den_link
+  
+  return(U_link)
+}     
+
+linkages_crossfit <- function(X_1, f, sparsity=1){
+  #input:
+  #X_1: data_matrix
+  #f: matrix of constraint
+  #sparsity: tuning parameter
+  
+  #output:
+  #U_link_swap: swapped universal test
+  
+  #rows of pathway
+  n <- nrow(X_1)
+  
+  #choosing the rows of training set
+  #Using ceiling because n can be odd, in this way train has a row more
+  train_ind <- sort(sample(1:n, size = ceiling(n/2)))
+  
+  #indexing the data matrix to extract rows for training set
+  train_X <- X_1[train_ind,]
+  
+  #indexing the data matrix to extract rows for test set
+  test_X <- X_1[-train_ind,]
+
+  #Unconstrained MLE for adjacency matrix A using test set
+  #we swap test set with train set
+  test_A <- MLEdag(X = train_X, D = f,tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A.H1
+  
+  #Unconstrained MLE for squared sigma using test set
+  #we swap test set with train set
+  test_sig <- sigmaquad(train_X, test_A)
+  
+  #Numerator of the swapped split likelihood ratio 
+  #now we use test_X in the numerator
+  loglike_num <- loglike(test_X, test_A, test_sig)
+  
+  #Constrained MLE for adjacency matrix A using train set
+  train_A0 <- MLEdag(X = test_X, D = f, tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A.H0
+  
+  #Constrained MLE for squared sigma using train set
+  train_sig0 <- sigmaquad(test_X, train_A0)
+  
+  #Denominator of the swapped split likelihood ratio for Graph linkage
+  #now we use test_X in the denominator
+  loglike_den_link <- loglike(test_X, train_A0, train_sig0)
+  
+  #Swapped split likelihood ratio test for graph linkage
+  U_link_swap <- loglike_num - loglike_den_link
+  
+  return(U_link_swap)
+}     
+
+W_n <- function(slr, slr_swap){
+  #input:
+  #slr: split likelihood ratio
+  #slr_swap: swapped split likelihood ratio
+  
+  #output: cross-fit likelihood ratio
+  (slr + slr_swap)/2
+}
+
+```
+
+#### Test of Directed Pathway
+The numerator of this test is equal to the one of Graph Linkages, so the code is the same. While here for the denominator we have to check which edge, among the ones that made the path, gives the max likelihood:  $max_{k=1}^{|F|}\mathcal{L}(\hat{A}_{0,k},\hat{\sigma}^2_{0,k}|D_n)$.
+We have thought the index set F, *path_1*, as a matrix with 2 columns in which each row is an edge. 
+
+```{r}
+#example of path: matrix 2x2, each row is an edge and they make a path
+#path <- matrix(c(1,4,4,2), 2, 2, byrow = T)
+
+pathways <- function(X_1, path_1, sparsity=1){
+  #input:
+  #X_1: data matrix
+  #path_1: constraint matrix, F in the instruction
+  #sparsity: tuning parameter
+  
+  #output:
+  #U_path: universal test
+  
+  #rows of pathway
+  n <- nrow(X_1)
+  
+  #choosing the rows of training set
+  #Using ceiling because n can be odd, in this way train has a row more
+  train_ind <- sample(1:n, size = ceiling(n/2))
+  
+  #indexing the data matrix to extract rows for training set
+  train_X <- X_1[train_ind,]
+  
+  #indexing the data matrix to extract rows for test set
+  test_X <- X_1[-train_ind,]
+  
+  #Unconstrained MLE for adjacency matrix A using test set
+  test_A <- MLEdag(X = test_X, tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A
+  
+  #Unconstrained MLE for squared sigma using test set
+  test_sig <- sigmaquad(test_X, test_A)
+  
+  #Numerator of the split likelihood ratio 
+  loglike_num <- loglike(train_X, test_A, test_sig)
+  
+  #initialization of denominator
+  loglike_den_path <- rep(NA, 2)
+  
+  #for each edge in the path
+  for(i in 1:nrow(path_1)){
+    
+    #initialization of the constraint for edge i
+    f <- matrix(0, p, p)
+    f[path_1[i,1], path_1[i,2]] <- 1
+    
+    #Constrained MLE for adjacency matrix A using train set
+    train_A_path <- MLEdag(X = train_X, D = f, tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A.H0
+    
+    #Constrained MLE for squared sigma using train set
+    train_sig_path <- sigmaquad(train_X, train_A_path)
+    
+    #Denominator i-th of the split likelihood ratio for Directed Pathway
+    loglike_den_path[i] <- loglike(train_X, train_A_path, train_sig_path)
+  }
+  
+  #Max between all possible denominators computed before
+  loglike_den_path <- max(loglike_den_path)
+
+  #Universal test for Directed Pathway
+  U_path <- loglike_num - loglike_den_path
+  
+  return(U_path)
+}
+
+pathways_swap <- function(X_1, path_1,sparsity=1){
+  #input:
+  #X_1: data matrix
+  #path_1: constraint matrix
+  #sparsity: tuning parameter
+  
+  #output:
+  #U_path_swap: swapped universal test
+  
+  #rows of pathway
+  n <- nrow(X_1)
+  
+  #choosing the rows of training set
+  #Using ceiling because n can be odd, in this way train has a row more
+  train_ind <- sample(1:n, size = ceiling(n/2))
+  
+  #indexing the data matrix to extract rows for training set
+  train_X <- X_1[train_ind,]
+  
+  #indexing the data matrix to extract rows for test set
+  test_X <- X_1[-train_ind,]
+  
+  #Unconstrained MLE for adjacency matrix A using test set
+  #we swap test set with train set
+  test_A <- MLEdag(X = train_X, tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A
+  
+  #Unconstrained MLE for squared sigma using test set
+  #we swap test set with train set
+  test_sig <- sigmaquad(train_X, test_A)
+  
+  #Numerator of the split likelihood ratio 
+  #now we use test_X in the numerator
+  loglike_num <- loglike(test_X, test_A, test_sig)
+  
+  #initialization of denominator
+  loglike_den_path <- rep(NA, 2)
+  
+  #for each edge in the path
+  for(i in 1:nrow(path_1)){
+    
+    #initialization of the constraint for edge i
+    f <- matrix(0, p, p)
+    f[path_1[i,1], path_1[i,2]] <- 1
+    
+    #Constrained MLE for adjacency matrix A using train set
+    #we swap test set with train set
+    train_A_path <- MLEdag(X = test_X, D = f, tau=0.3, mu=sparsity, rho=1.2, trace_obj = F)$A.H0
+    
+    #Constrained MLE for squared sigma using train set
+    #we swap train set with test set
+    train_sig_path <- sigmaquad(test_X, train_A_path)
+    
+    #Denominator i-th of the split likelihood ratio for Directed Pathway
+    #now we use test_X in the denominator
+    loglike_den_path[i] <- loglike(test_X, train_A_path, train_sig_path)
+  }
+  
+  #Max between all possible denominators computed before
+  loglike_den_path <- max(loglike_den_path)
+
+  ##Universal test for Directed Pathway
+  U_path_swap <- loglike_num - loglike_den_path
+  
+  return(U_path_swap)
+}
+```
+## ToDo List point 3
+
+#### Size of tests
+Reading section 5 of paper *Likelihood ratio tests for a large directed acyclic graph* we quote "For the size of a test, we compute the percentage of times rejecting H0 out of 1000 simulations when H0 is true", so to check size of universal test for linkage we should count how many type-I errors occur in M simulations for a certain level $\alpha$. (We have chosen $\alpha = 0.1$)
+So we will take A compatible with $H_0$ and we will observe the proportion of rejection. We will check the size of the both tests. As F, the index set, we have chosen at random four edges to check. We represent F as a zeros matrix *f* pxp except for elements equal to one corresponding to edges that we want to verify.
+
+We have chosen *p* and *n* such that to resemble to our flow-citometry setup (p = 15 and n = 800) but to make a comparison we have also pick n = 80 and n = 1600 to see if it affects the size. We are not interested in change the value of p because we are going to work with a fixed number of features while with an increasing number of observations. 
+
+To guarantee the acyclicity of the direct graph we have chosen A lower triangular with zeros on the diagonal as it is written in professor' scribbles.
+
+```{r}
+#replicability
+set.seed(2018)
+
+#features, columns of X
+p <- 15
+
+#observations, rows of X
+n1 <- 80
+n2 <- 800
+n3 <- 1000
+
+sparsity <- 1/p
+
+#index set, constraint
+f <- matrix(0, p, p)
+f[5,2] <- 1
+f[14,13] <- 1
+f[8,4] <- 1
+f[15,12] <- 1
+
+
+#adjacency matrix, like in github example. aciclicity guaranteed
+A <- matrix(rbinom(p*p,1,sparsity)*sign(runif(p*p,min=-1,max=1)),p,p)
+A[upper.tri(A, diag = T)] <- 0
+
+#**COMPATIBLE** with H0
+A[5,2] <- 0
+A[14,13] <- 0
+A[8,4] <- 0
+A[15,12] <- 0
+
+# Simulation size
+M <- 1000
+
+alpha <- 0.1
+
+#initialization of values of universal tests
+U_n1 <- rep(NA, M)
+U_n_s1 <- rep(NA, M)
+
+U_n2 <- rep(NA, M)
+U_n_s2 <- rep(NA, M)
+
+U_n3 <- rep(NA, M)
+U_n_s3 <- rep(NA, M)
+
+for(m in 1:M){
+  # Build the X data-matrix under H0
+  X1 <- matrix(rnorm(n1*p), nrow = n1, ncol = p) %*% t(solve(diag(p) - A))
+  X2 <- matrix(rnorm(n2*p), nrow = n2, ncol = p) %*% t(solve(diag(p) - A))
+  X3 <- matrix(rnorm(n3*p), nrow = n3, ncol = p) %*% t(solve(diag(p) - A))
+  
+  # Compute the Split Likelihood Ratio Test
+  U_n1[m] <- linkages_split(X1,  f)
+  U_n2[m] <- linkages_split(X2,  f)
+  U_n3[m] <- linkages_split(X3,  f)
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap1 <- linkages_crossfit(X1,  f)
+  U_n_s1[m] <- W_n(U_n1[m], U_n_swap1)
+  U_n_swap2 <- linkages_crossfit(X2,  f)
+  U_n_s2[m] <- W_n(U_n2[m], U_n_swap2)
+  U_n_swap3 <- linkages_crossfit(X3,  f)
+  U_n_s3[m] <- W_n(U_n3[m], U_n_swap3)
+  
+}
+
+#observe the proportion of rejection of Split Likelihood Ratio Test 
+size_1 <- length(U_n1[U_n1 > log(1/alpha)]) / M
+#paste("The size of test that uses Split Likelihood Ratio with n = 80 is: ", size_1)
+
+#observe the proportion of rejection of Split Likelihood Ratio Test 
+size_3 <- length(U_n2[U_n2 > log(1/alpha)]) / M
+#paste("The size of test that uses Split Likelihood Ratio with n = 800 is: ", size_3)
+
+
+#observe the proportion of rejection of Cross-Fit Likelihood Ratio Test 
+size_2 <- length(U_n_s1[U_n_s1 > log(1/alpha)]) / M
+#paste("The size of test that uses Cross-Fit Likelihood Ratio with n = 80 is: ", size_2)
+
+#observe the proportion of rejection of Split Likelihood Ratio Test 
+size_4 <- length(U_n_s2[U_n_s2 > log(1/alpha)]) / M
+#paste("The size of test that uses Cross-Fit Likelihood Ratio with n = 800 is: ", size_4)
+
+#observe the proportion of rejection of Cross-Fit Likelihood Ratio Test 
+size_5 <- length(U_n_s3[U_n_s3 > log(1/alpha)]) / M
+#paste("The size of test that uses Cross-Fit Likelihood Ratio with n = 1600 is: ", size_5)
+
+#observe the proportion of rejection of Split Likelihood Ratio Test 
+size_6 <- length(U_n3[U_n3 > log(1/alpha)]) / M
+#paste("The size of test that uses Split Likelihood Ratio with n = 1600 is: ", size_6)
+
+#results
+ss <- c(size_1, size_2, size_3, size_4, size_6, size_5)
+matrice <- matrix(ss,2,3, dimnames = list(c("Split LR", "Cross-Fit LR"), c("n = 80", "n = 800", "n = 1600")))
+matrice
+```
+
+The size of both tests for n = 80 is really low so it means that the probability of a false discovery is very rare for both of them. This means that they work properly. Increasing n up to 800, size of both tests increase a bit, but it still assumes small values, under 0.06. Between the two tests there is not a significant difference for n = 800 so in this case they are more or less equivalent, while for n = 80 Cross-Fit LR has size around ten times smaller.
+For n = 1000 instead both tests have a size that is almost zero: we think that this is due to M, simulation size, that is not too big, but in general we think that it is reasonable that increasing the number of observations type-I errors occur less with this small number of feature.
+
+```{r, echo=F}
+#visualization
+par(mfrow=c(3,2))
+
+#histograms of tests
+hist(U_n1, breaks = 60, prob = T, col = "darkgreen", main = "SLR with n = 80", xlab = expression(U_n1))
+abline(v = log(1/alpha), lwd = 3, col = "salmon")
+
+hist(U_n2, breaks = 60, prob = T, col = "darkgreen", main = "Cross-Fit LR with n = 80", xlab = expression(U_n_s1))
+abline(v = log(1/alpha), lwd = 3, col = "salmon")
+
+hist(U_n3, breaks = 60, prob = T, col = "darkgreen", main = "SLR with n = 800", xlab = expression(U_n2))
+abline(v = log(1/alpha), lwd = 3, col = "salmon")
+
+hist(U_n_s1, breaks = 60, prob = T, col = "darkgreen", main = "Cross-Fit LR with n = 800", xlab = expression(U_n_s2))
+abline(v = log(1/alpha), lwd = 3, col = "salmon")
+
+hist(U_n_s2, breaks = 60, prob = T, col = "darkgreen", main = "SLR with n = 1000", xlab = expression(U_n3))
+abline(v = log(1/alpha), lwd = 3, col = "salmon")
+
+hist(U_n_s3, breaks = 60, prob = T, col = "darkgreen", main = "Cross-Fit LR with n = 1000", xlab = expression(U_n_s3))
+abline(v = log(1/alpha), lwd = 3, col = "salmon")
+```
+
+Through these histograms we have visualized what values of the Split Likelihood Ratio and Cross-Fit Likelihood Ratio we have obtained. The vertical line points the minimum value $log(\frac{1}{\alpha})$ for which we have to reject the null hypothesis.
+
+#### Power of tests
+Now we want to analyze the power of the test which is the probability of a correct discovery: P(Reject $H_0$|$H_0$ is False) so we have chosen A not compatible with $H_0$ we observe the proportion of rejections of our tests. There are many ways to choose A not compatible with $H_0$, we have decided to take three different A, A1, A2, and A3: one closer to $H_0$ and the other further. From the professor' scribbles we know that the closer A is to satisfy $H_0$, the more difficult the discovery (lower power). To make sense of words "closer" or "further" we have thought as matrix distance $d(A,B)=\sum_{i=1}^p\sum_{j=1}^p|a_{ij} - b_{ij}|$. Since we are dealing with adjacency matrices (matrices of zeros and ones), distance defined in this way increases by one for each element that the two matrices have different between them.
+
+So we have started taking an adjacency matrix compatible with H0 and then for A1 we have changed just one element, corresponding to the first edge of the index set, so A1 is far 1 from the null hypothesis. A2 is far 2 from the null because we have modified also the element corresponding to the second edge of the index set. While A3 is far 4 from the null hypothesis, that is the maximum distance in our setup because the index set is made by 4 edges. To sum up:
+
+<div style = "margin-left:30%; margin-right:30%;">
+| Alternative Hypothesis |  Distances             |
+| ---------------------: | :----------------------|
+| A1                     |    d(A1,A0) = 1        |
+| A2                     |    d(A1,A0) = 2        |
+| A3                     |    d(A1,A0) = 4        |
+</div>
+
+```{r}
+#adjacency matrix
+# **UNCOMPATIBLE** with H0
+#we change just one element so it is far 1 from H_0 
+A1 <- matrix(rbinom(p*p,1,sparsity)*sign(runif(p*p,min=-1,max=1)),p,p)
+A1[upper.tri(A, diag = T)] <- 0
+A1[5,2] <- 1
+A1[14,13] <- 0
+A1[8,4] <- 0
+A1[15,12] <- 0
+
+#adjacency matrix
+# **UNCOMPATIBLE** with H0
+#we change just one element from A1 so it is far 2 from H_0 
+A2 <- A1
+A2[14,13] <- 1
+
+
+#adjacency matrix
+# **UNCOMPATIBLE** with H0
+#we change all the element so it is far 4 from H_0 
+A3 <- A2
+A3[8,4] <- 1
+A3[15,12] <- 1
+
+U_n_1 <- rep(NA, M)
+U_n_s1 <- rep(NA, M)
+U_n_2 <- rep(NA, M)
+U_n_s2 <- rep(NA, M)
+U_n_3 <- rep(NA, M)
+U_n_s3 <- rep(NA, M)
+
+for(m in 1:M){
+  # Build the X data-matrix under H1
+  X_1 <- matrix(rnorm(n1*p), nrow = n1, ncol = p) %*% t(solve(diag(p) - A1))
+  
+  # Compute the Split Likelihood Ratio Test
+  U_n_1[m] <- linkages_split(X_1,  f)
+  
+  # Compute the cross-fit Likelihood Ratio Test
+  U_n_swap <- linkages_crossfit(X_1,  f)
+  
+  U_n_s1[m] <- W_n(U_n_1[m], U_n_swap)
+  
+  # Build the X data-matrix under H1
+  X_2 <- matrix(rnorm(n1*p), nrow = n1, ncol = p) %*% t(solve(diag(p) - A2))
+  
+  # Compute the Split Likelihood Ratio Test
+  U_n_2[m] <- linkages_split(X_2,  f)
+  
+  # Compute the Split Likelihood Ratio Test
+  U_n_swap <- linkages_crossfit(X_2,  f)
+  
+  U_n_s2[m] <- W_n(U_n_2[m], U_n_swap)
+  
+  # Build the X data-matrix under H1
+  X_3 <- matrix(rnorm(n1*p), nrow = n1, ncol = p) %*% t(solve(diag(p) - A3))
+  
+  # Compute the Split Likelihood Ratio Test
+  U_n_3[m] <- linkages_split(X_3,  f)
+  
+  # Compute the Split Likelihood Ratio Test
+  U_n_swap <- linkages_crossfit(X_3,  f)
+  
+  U_n_s3[m] <- W_n(U_n_3[m], U_n_swap)
+}
+
+
+powers_1 <- length(U_n_1[U_n_1 > log(1/alpha)]) / M
+#paste("The power of test that uses Split Likelihood Ratio, choosing A1 quite near to H0, is: ", powers_1)
+
+powers_3 <- length(U_n_s1[U_n_s1 > log(1/alpha)]) / M
+#paste("The power of test that uses Cross-Fit Likelihood Ratio, choosing A1 quite near to H0, is: ", powers_3)
+
+powers_2 <- length(U_n_2[U_n_2 > log(1/alpha)]) / M
+#paste("The power of test that uses Split Likelihood Ratio, choosing A2 further from H0, is: ", powers_2)
+
+powers_4 <- length(U_n_s2[U_n_s2 > log(1/alpha)]) / M
+#paste("The power of test that uses Cross-Fit Likelihood Ratio, choosing A2 further from H0, is: ", powers_4)
+
+powers_5 <- length(U_n_3[U_n_3 > log(1/alpha)]) / M
+#paste("The power of test that uses Split Likelihood Ratio, choosing A3 further from H0, is: ", powers_5)
+
+powers_6 <- length(U_n_s3[U_n_s3 > log(1/alpha)]) / M
+#paste("The power of test that uses Cross-Fit Likelihood Ratio, choosing A3 further from H0, is: ", powers_6)
+
+
+pp <- c(powers_1, powers_2, powers_5, powers_3, powers_4, powers_6)
+
+matrice <- matrix(pp,2,3,byrow = T, dimnames = list(c("Split LR", "Cross-Fit LR"), c("Using A1", "Using A2", "using A3")))
+matrice
+```
+
+As we expected the more the alternative hypothesis is nearer to the null the more for the test is difficult the discovery. So this is good confirmation of what we know at the beginning. For A1 we obtain a really low value for the power of the test but this is justifiable because it differs from the null just for one element. On the other hand for the other two alternative hypothesis we obtain reasonable and much higher values for the power: in particular using A3 we get a power that is very near to 1. We do not obtain significant difference between Split and Cross-fit Likelihood Test, so we can use one of them indifferently. (To analyze the power we have just taken n = 80 for running time reason.) 
+
+## ToDo List point 4
+We have written 3-linkage type hypotheses:
+
+$F_1$ = {(PKC,PKA)} $\rightarrow$ $H_0$: $\textrm{A}$[j,k] = 0 for all (j,k) $\in$ $F_1$ vs $H_1$: not $H_0$
+
+$F_2$ = {(Erk,Akt)} $\rightarrow$ $H_0$: $\textrm{A}$[j,k] = 0 for all (j,k) $\in$ $F_2$ vs $H_1$: not $H_0$
+
+$F_3$ = {(PIP2,PKC)} $\rightarrow$ $H_0$: $\textrm{A}$[j,k] = 0 for all (j,k) $\in$ $F_3$ vs $H_1$: not $H_0$
+
+$F_4$ = {(PKC, Jnk), (Mek, Erk), (Raf, Mek)} $\rightarrow$ $H_0$: $\textrm{A}$[j,k] = 0 for all (j,k) $\in$ $F_3$ vs $H_1$: not $H_0$
+
+We have chosen these four because the first two index set F include a **reported** edge(connections that are not well-known) so we want to check through our tests the presence of these reported directed connections. We have thought that to check them is more interesting to check **expected** edges because they are connections well-established in the literature. 
+In the third index set we have chosen a **missing** edge (expected connection but Bayesian network failed to find) because we want to observe if through our tests we are able to detect this connection. In the fourth we want to check the expected connections just to have a confirm. 
+
+
+We have written 1-pathway type hypothesis: 
+
+$F_5$ = {(Plc$\gamma$, PIP2), (PIP2, PKC), (PKC, Raf), (Raf, Mek), (Mek, Erk), (Erk, Akt)} $\rightarrow$ $H_0$: $\textrm{A}$[j,k] = 0 for some (j,k) $\in$ $F_4$ vs $H_1$: $\textrm{A}$[j,k] $\neq$ 0 for all (j,k) $\in$ $F_4$
+
+We have chosen this path because in it there is both a missing edge and a reported one. So we are interested to see if our tests reject or not this null hypothesis. 
+
+(We have used names of features in that are used in instruction's DAG: they are a bit different from names of excel file)
+
+## ToDo List point 5
+
+To start we have decided to work on the seventh intervention, the cd3cd28+ly one.
+
+Through a box plot we have checked if variables have as mean zero because we are working under assumption that the data are *zero-mean Gaussian*. 
+
+```{r, echo = F}
+#load data
+mydata <- read_excel("cytometry-data.xlsx", sheet = 7)
+
+#each element was a list, I will trasform in numeric
+mydata <- matrix(as.numeric(unlist(mydata)),ncol=11)
+
+#Each column represents a variable(proteins or lipids)
+colnames(mydata) <- c("praf","pmek","plcg","PIP2","PIP3","p44/42","pakts473","PKA","PKC","P38","pjnk")
+
+#boxplot of the first variable
+boxplot(mydata[,1], col ="salmon", main = paste("Box Plot of ",colnames(mydata)[1]))
+```
+
+Just the first variable shows that they are not centered in zero so we will use the function *scale* to verify our working assumption. Then for each variable we plot its histogram and add a line that shows the ideal Gaussian trend. 
+
+```{r, echo = F}
+#scale data to obtain zero-mean property
+#mydata <- boxcox(mydata, standardize = T)
+#data <- mydata$x.t
+data <- scale(mydata)
+#to a more compact visualization
+par(mfrow=c(2,2))
+
+#for each variable plot its histogram and and Gaussian trend
+for(i in 1:ncol(data)){
+  
+  #hist
+  hist(data[,i],breaks=20, prob = T, col = "orchid", main = paste("Histogram of", colnames(data)[i]), xlab = "X", xlim = c(min(data[,i])-0.5, max(data[,i])))
+  
+  #Gaussian pdf
+  curve( dnorm(x,mean(data[,i]),sd(data[,i])),min(data[,i]) - 0.5,max(data[,i]),add = T,lwd = 3, col = "steelblue" )
+  axis(1, at = seq(floor(min(data[,i])), ceiling(max(data[,i])),1))
+}
+
+#Normal Q-Q Plot
+par(mfrow=c(2,2))
+for(i in 1:ncol(data)){
+  qqnorm(data[,i], pch = 19, frame = F, col ="green", main = paste("Normal Q-Q Plot of", colnames(data)[i]))
+  qqline(data[,i], col ="purple", lwd = 2)
+}
+
+#Empirical CDF
+par(mfrow=c(2,2))
+for(i in 1:ncol(data)){
+  plot(ecdf(data[,i]), col ="darkgreen", pch =19, cex = 0.6, main =paste("Empirical CDF of ", colnames(data)[i]))
+  
+  #Gaussian cdf
+  curve(pnorm(x,0,sd(data[,i])), add = T, col ="orange", lwd =3)
+}
+```
+
+From these plots we are aware of that data are not completely gaussian and gaussianity is a working assumption, but they are not too far from this condition so we have preferred to not use the function *boxcox* because transforming our data means also lose in interpretability because we will dealing with a totally "exotic" unit of measure as we have read in the forum.
+
+Now we will write in the form of matrix the four linkage-type null hypothesis that we have thought and for five different values of sparsity we have performed the two tests. We have chosen value of sparsity really near to zero.
+
+```{r}
+alpha <- 0.1
+
+#defining our index sets for first three hypothesis
+n <- nrow(data)
+p <- ncol(data)
+f_1 <- matrix(0, p, p)
+
+#names of rows and columns
+colnames(f_1) <- c("praf","pmek","plcg","PIP2","PIP3","p44/42","pakts473","PKA","PKC","P38","pjnk")
+rownames(f_1) <- c("praf","pmek","plcg","PIP2","PIP3","p44/42","pakts473","PKA","PKC","P38","pjnk")
+f_2 <- f_1
+f_3 <- f_1
+f_4 <- f_1
+
+#chosen edges
+f_1["PKC", "PKA"] = 1
+f_2["p44/42","pakts473"] = 1
+f_3["PIP2", "PKC"] = 1
+#(PKC, Jnk), (Mek, Erk), (Raf, Mek)
+f_4["PKC", "pjnk"] = 1
+f_4["pmek", "p44/42"] = 1
+f_4["praf", "pmek"] = 1
+
+#we try to change the sparsity among these four values
+sparsiti <- c(0.0001, 0.001, 0.01, 0.1, 1)
+
+#initialization
+U_n1 <- rep(NA, length(sparsiti))
+U_n2 <- rep(NA, length(sparsiti))
+U_n3 <- rep(NA, length(sparsiti))
+U_n4 <- rep(NA, length(sparsiti))
+U_n_s1 <- rep(NA, length(sparsiti))
+U_n_s2 <- rep(NA, length(sparsiti))
+U_n_s3 <- rep(NA, length(sparsiti))
+U_n_s4 <- rep(NA, length(sparsiti))
+slr_results <- matrix(NA, length(sparsiti), 4)
+crossfit_results <- matrix(NA, length(sparsiti),4)
+
+for(i in 1:length(sparsiti)){
+  #first hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n1[i] <- linkages_split(data,  f_1, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap1 <- linkages_crossfit(data,  f_1, sparsity = sparsiti[i])
+  U_n_s1[i] <- W_n(U_n1[i], U_n_swap1)
+  
+  #second hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n2[i] <- linkages_split(data,  f_2, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap2 <- linkages_crossfit(data,  f_2, sparsity = sparsiti[i])
+  U_n_s2[i] <- W_n(U_n2[i], U_n_swap2)
+  
+  #Third hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n3[i] <- linkages_split(data,  f_3, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap3 <- linkages_crossfit(data,  f_3, sparsity = sparsiti[i])
+  U_n_s3[i] <- W_n(U_n3[i], U_n_swap3)
+  
+  #Fourth hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n4[i] <- linkages_split(data,  f_4, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap4 <- linkages_crossfit(data,  f_4, sparsity = sparsiti[i])
+  U_n_s4[i] <- W_n(U_n4[i], U_n_swap4)
+  
+  #results
+  slr_results[i, ] <- c(U_n1[i], U_n2[i], U_n3[i], U_n4[i])
+  crossfit_results[i, ] <- c(U_n_s1[i], U_n_s2[i], U_n_s3[i], U_n_s4[i])
+}
+
+#can we reject?
+slr_results <- slr_results > log(1/alpha)
+crossfit_results <- crossfit_results > log(1/alpha)
+
+print("Can we reject our null linkage-type hypothesis at level 0.1?")
+```
+
+```{r, echo=FALSE}
+for(i in 1:length(sparsiti)){
+  #visualization of results
+  matrice <- matrix(c(slr_results[i, ],crossfit_results[i, ]),4,2,dimnames = list(c("First Hyp.", "Second Hyp.", "Third Hyp.", "Fourth Hyp."), c("Split LR", "Cross-Fit LR")))
+  print(paste("For sparsity equals to: ", sparsiti[i], " we have obtained:"))
+  print(matrice)
+  print("-------------------------------------------------")
+}
+
+```
+
+It seems that sparsity does not affect our results. We sometimes obtain in these matrices *TRUE* values, so it can happen that we reject the null hypothesis. As professor said in the forum: "Because of the random split and at small sample sizes in particular, on the same dataset $\mathbb{X}$ you may get different results in different attempts."
+
+We have not performed subsampling or K-fold as suggested in the paper, but we know that $\mathbb{W_n}$ is more robust to this type of noise. Indeed through $\mathbb{W_n}$ we never reject the null hypothesis, instead with $U_n$ it can happen that we find some rejection. 
+
+In general both tests do not reject the four hypothesis that we have made: this is not surprising for the fourth one because we have taken all *expected* edges. Also the edges that we have selected for first and second hypothesis are *reported* so Bayesian network has already found them and we have confirmed them. Instead in the third hypothesis we have tried to check the presence of a *missed* edge, and our tests assure that that edge is there, so it is a good result because these tests work where Bayesian network fails.
+
+```{r}
+#(Plc$\gamma$, PIP2), (PIP2, PKC), (PKC, Raf), (Raf, Mek), (Mek, Erk), (Erk, Akt)
+
+#we have written the path through the index
+f_5 <- matrix(c(3,4,4,9,9,1,1,2,2,6,6,7),ncol = 2, byrow = T)
+
+U_n5 <- rep(NA, length(sparsiti))
+U_n_s5 <- rep(NA, length(sparsiti))
+for(i in 1:length(sparsiti)){
+  U_n5[i] <- pathways(data, f_5, sparsiti[i])
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap5 <- pathways_swap(data,  f_5, sparsiti[i])
+  U_n_s5[i] <- W_n(U_n5[i], U_n_swap5)
+
+}
+
+#can we reject?
+slr_results <- U_n5 > log(1/alpha)
+crossfit_results <- U_n_s5 > log(1/alpha)
+
+print("Can we reject our null pathway-type hypothesis at level 0.1?")
+```
+
+```{r, echo=FALSE}
+#visualization of results
+matrice <- matrix(c(slr_results,crossfit_results),length(sparsiti),2,dimnames = list(c("Pathway Hyp. with sparsity = 0.0001", "Pathway Hyp. with sparsity = 0.001","Pathway Hyp. with sparsity = 0.01","Pathway Hyp. with sparsity = 0.1","Pathway Hyp. with sparsity = 1"), c("Split LR", "Cross-Fit LR")))
+matrice
+```
+
+Also for the pathway-type hypothesis sparsity seems not to affect the results. 
+Noise due to randomization instead seems to be less relevant because rarely we have obtained a *TRUE* value.
+
+Our tests cannot reject also the pathway-type hypothesis in which we have put, over *expected*, also a *missed* and a *reported* edge, so it is a good result because Bayesian network did not visualize the missed edge. For the others edge we have obtain a good confirmation.  
+
+At this point we have tried to use the asymptotic implemented in the *MLEdag()* function. Then for each value of sparsity that we have chosen we run this function and store the p-values. 
+
+```{r}
+#initialization at random of the adjacency matrix
+sparsity <- 1/p
+A <- matrix(rbinom(p*p,1,sparsity)*sign(runif(p*p,min=-1,max=1)),p,p)
+A[upper.tri(A, diag = T)] <- 0
+
+#initialization
+pval1 <- rep(NA, length(sparsiti))
+pval2 <- rep(NA, length(sparsiti))
+pval3 <- rep(NA, length(sparsiti))
+pval5 <- rep(NA, length(sparsiti))
+X <- data %*% t(solve(diag(p) - A))
+
+for(i in 1:length(sparsiti)) {
+  out <- MLEdag(X=X,D=f_1,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval1[i] <- out$pval
+  out <- MLEdag(X=X,D=f_2,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval2[i] <- out$pval
+  out <- MLEdag(X=X,D=f_3,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval3[i] <- out$pval
+  out <- MLEdag(X=X,D=f_4,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval5[i] <- out$pval
+}
+
+results <- c ("p-value first Hyp. :"= pval1[1], "p-value second Hyp. :"= pval2[1], "p-value third Hyp. :"= pval3[1], "p-value fourth Hyp. :"= pval5[1])
+results
+```
+
+The parameter *mu* does not affect the result of p-value since we always the same results for each hypothesis. For the third and fourth hypothesis we obtain values that are almost zero: The smaller the p–value the stronger the evidence against $H_0$ so if we have done things correctly we can reject the third hypothesis (missing edge) and fourth one (expected edges), while instead the first and the second hypothesis cannot be rejected. So we obtain a different results from universal tests just for the fourth hypothesis. But these edges are expected so universal tests are more reliable or we have used MLEdag() not properly (it is also invariant from parameter *mu*).
+
+## ToDo List point 6
+
+Here we have used the "uber-dataset", stacking all nine interventions together.
+
+```{r}
+#load data
+mydata <- read_excel("cytometry-data.xlsx")
+
+#each element was a list, I will trasform in numeric
+mydata <- matrix(as.numeric(unlist(mydata)),ncol=11)
+
+#Each column represents a variable(proteins or lipids)
+colnames(mydata) <- c("praf","pmek","plcg","PIP2","PIP3","p44/42","pakts473","PKA","PKC","P38","pjnk")
+data <- scale(mydata)
+```
+
+Through the same line of code we have repeated the analysis. 
+
+```{r, echo = F}
+#initialization
+U_n1 <- rep(NA, length(sparsiti))
+U_n2 <- rep(NA, length(sparsiti))
+U_n3 <- rep(NA, length(sparsiti))
+U_n4 <- rep(NA, length(sparsiti))
+U_n_s1 <- rep(NA, length(sparsiti))
+U_n_s2 <- rep(NA, length(sparsiti))
+U_n_s3 <- rep(NA, length(sparsiti))
+U_n_s4 <- rep(NA, length(sparsiti))
+slr_results <- matrix(NA, length(sparsiti), 4)
+crossfit_results <- matrix(NA, length(sparsiti),4)
+
+for(i in 1:length(sparsiti)){
+  #first hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n1[i] <- linkages_split(data,  f_1, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap1 <- linkages_crossfit(data,  f_1, sparsity = sparsiti[i])
+  U_n_s1[i] <- W_n(U_n1[i], U_n_swap1)
+  
+  #second hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n2[i] <- linkages_split(data,  f_2, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap2 <- linkages_crossfit(data,  f_2, sparsity = sparsiti[i])
+  U_n_s2[i] <- W_n(U_n2[i], U_n_swap2)
+  
+  #Third hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n3[i] <- linkages_split(data,  f_3, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap3 <- linkages_crossfit(data,  f_3, sparsity = sparsiti[i])
+  U_n_s3[i] <- W_n(U_n3[i], U_n_swap3)
+  
+  #Fourth hypothesis
+  # Compute the Split Likelihood Ratio Test
+  U_n4[i] <- linkages_split(data,  f_4, sparsity = sparsiti[i])
+  
+  #Compute the Cross-Fit Likelihood Ratio Test
+  U_n_swap4 <- linkages_crossfit(data,  f_4, sparsity = sparsiti[i])
+  U_n_s4[i] <- W_n(U_n4[i], U_n_swap4)
+  
+  #results
+  slr_results[i, ] <- c(U_n1[i], U_n2[i], U_n3[i], U_n4[i])
+  crossfit_results[i, ] <- c(U_n_s1[i], U_n_s2[i], U_n_s3[i], U_n_s4[i])
+}
+
+#can we reject?
+slr_results <- slr_results > log(1/alpha)
+crossfit_results <- crossfit_results > log(1/alpha)
+
+print("Can we reject our null linkage-type hypothesis at level 0.1?")
+```
+
+```{r, echo=FALSE}
+for(i in 1:length(sparsiti)){
+  #visualization of results
+  matrice <- matrix(c(slr_results[i, ],crossfit_results[i, ]),4,2,dimnames = list(c("First Hyp.", "Second Hyp.", "Third Hyp.", "Fourth Hyp."), c("Split LR", "Cross-Fit LR")))
+  print(paste("For sparsity equals to: ", sparsiti[i], " we have obtained:"))
+  print(matrice)
+  print("-------------------------------------------------")
+}
+```
+
+With all data stacked together we obtain analogous results to ones obtained with just one interventions. Indeed with the *Cross-Fit Likelihood Ratio* we always reject the null hypothesis while with the other universal test there are some rejection, but just a few so maybe there are less noise (less randomicity). 
+
+```{r}
+#initialization at random of the adjacency matrix
+sparsity <- 1/p
+A <- matrix(rbinom(p*p,1,sparsity)*sign(runif(p*p,min=-1,max=1)),p,p)
+A[upper.tri(A, diag = T)] <- 0
+
+#initialization
+pval1 <- rep(NA, length(sparsiti))
+pval2 <- rep(NA, length(sparsiti))
+pval3 <- rep(NA, length(sparsiti))
+pval5 <- rep(NA, length(sparsiti))
+X <- data %*% t(solve(diag(p) - A))
+
+for(i in 1:length(sparsiti)) {
+  out <- MLEdag(X=X,D=f_1,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval1[i] <- out$pval
+  out <- MLEdag(X=X,D=f_2,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval2[i] <- out$pval
+  out <- MLEdag(X=X,D=f_3,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval3[i] <- out$pval
+  out <- MLEdag(X=X,D=f_4,tau=0.35,mu=sparsiti[i],rho=1.2,trace_obj=FALSE)
+  pval5[i] <- out$pval
+}
+
+results <- c ("p-value first Hyp. :"= pval1[1], "p-value second Hyp. :"= pval2[1], "p-value third Hyp. :"= pval3[1], "p-value fourth Hyp. :"= pval5[1])
+results
+```
+
+On the other hand looking at the obtained p-values, they are all near to zero so we should reject all the null hypothesis, but this is not possible. This behaviour could be explained maybe from the facts that our data are not perfectly gaussian because we have decided to have a completely different unit measure.
+
+**Why do you think we can talk about causal relations in the context of this applications?**
+
+"Flow cytometry can measure multiple molecules within each cell, it is
+possible to identify complex causal influence relationships involving multiple proteins." "Flow cytometry measurements were taken from 11 phosphorylated proteins and phospholipids under nine experimental conditions. These simultaneous measurements allow researchers to infer causal influences in cellular signalling."
+
+We are quoting respectively the *Constrained likelihood for reconstructing a directed acyclic Gaussian graph* and *Causal-Protein-Signaling-Networks*. Key point is that there are simultaneous measurements. So "A directed arc from X to Y is interpreted as a causal influence from X onto Y": "Directed acyclic graphical models are widely used to represent directional relations or parent-child relations among interacting units". 
+
+**Do you think we need to adjust for multiplicity here? Explain.**
+
+In this last point we have just increased the number of observations so if we did not adjust multiplicity in the previous point we think that increasing n does not justify a multiplicity adjustment. 
