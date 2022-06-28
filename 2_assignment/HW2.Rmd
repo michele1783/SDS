@@ -1,0 +1,1107 @@
+---
+title: "HW2"
+author: "Puzzo"
+date: "12/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DescTools)
+library(stringr)
+library(grid)
+library(gtable)
+library(GGally)
+library(DescTools)
+library(stringr)
+library(igraph)
+library(gridExtra)
+library(network)
+library(ggplot2)
+library(plotrix)
+library(psych)
+```
+## 1. Introduction
+
+The setup of this game is as follows. Here are our players: 
+
+* $A$ - Antwohnette
+* $B$ - BadellPadel
+* $C$ - Chumbawamba 
+
+We know that:
+
+* $\nu(\emptyset)=0$
+* $\nu(A)=\nu(B)=\nu(C)=0$
+* $\nu(AB)=2 \hspace{.5cm} \nu(BC)=2 \hspace{.5cm} \nu(AC)=0$
+* $\nu(ABC)=4$
+
+
+The marginal contribution of each player $j$ in a game $G(\pi, \nu)$, $\pi$ being
+the current permutation considered and $\nu$ the characteristic function, and $S_{\pi}(j)$ the contribution of 
+the predecessors of $j$ in the permutation $\pi$, is defined as: 
+$$ \Delta_{\pi}^{G}(j) = \nu(S_{\pi}(j) \cup \{j\}) - \nu(S_{\pi}(j))$$
+
+We will now have to tackle calculate the various payoffs in each permutation of $A,B,C$. Let us start:
+$$\\[.5cm]$$
+
+<table>
+<tr>
+<td>
+* **ABC**
+  - $\nu(A) = \nu(\emptyset \cup A) - \nu(\emptyset) = 0$
+  - $\nu(B) = \nu(A \cup B) - \nu(A) = 2$
+  - $\nu(C) = \nu(AB \cup C) - \nu(AB) = 2$
+</td>
+<td>
+* **ACB**
+  - $\nu(A) = 0$
+  - $\nu(C) = \nu(A \cup C) - \nu(A) = 0$
+  - $\nu(B) = \nu(AC \cup B) - \nu(AC) = 4$
+</td>
+</tr>
+
+<tr>
+<td>
+* **BAC**
+  - $\nu(B) = 0$
+  - $\nu(A) = \nu(AB) - \nu(B) = 2$
+  - $\nu(C) = \nu(AB \cup C) - \nu(AB) = 2$
+</td>
+<td>
+* **BCA**
+  - $\nu(B) = 0$
+  - $\nu(C) = \nu(C \cup B) - \nu(B) = 2$
+  - $\nu(A) = \nu(BC \cup A) - \nu(BC) = 2$
+</td>
+</tr>
+
+<tr>
+<td>
+* **CAB**
+  - $\nu(C) = 0$
+  - $\nu(A) = \nu(A \cup C) - \nu(C) = 0$
+  - $\nu(B) = \nu(AC \cup B) - \nu(AC) = 4$
+</td>
+<td>
+* **CBA**
+  - $\nu(C) = 0$
+  - $\nu(B) = \nu(B \cup C) - \nu(C) = 2$
+  - $\nu(A) = \nu(BC \cup A) - \nu(BC) = 2$
+</td>
+</tr>
+
+</table>
+
+$$\\[1cm]$$
+
+Finally, we can put everything in this more readable table:
+
+
+<div style = "margin-left:30%; margin-right:30%;">
+| Permutation | $\nu(A)$ | $\nu(B)$ | $\nu(C)$|
+| ----------: | :------: | :------: | :------:|
+|     ABC     |    0     |    2     |     2   |
+|     ACB     |    0     |    4     |     0   |
+|     BAC     |    2     |    0     |     2   |
+|     BCA     |    2     |    0     |     2   |
+|     CAB     |    0     |    4     |     0   |
+|     CBA     |    2     |    2     |     0   |
+|  **Total**  |  **6**   |  **12**  |  **6**  |
+</div>
+
+
+
+Now we can calculate $\psi(j)$: 
+
+$$\psi^G(j) =  \frac{1}{p!} \cdot \sum_{\pi \in \Pi_P} \Delta_{\pi}^{G}(j)$$
+Using the definition above: 
+
+* $\psi(A) = \frac{1}{6} \cdot (\Delta_{\text{ABC}}(\text{A}) + \Delta_{\text{ACB}}(\text{A}) + ...) = 1$
+* $\psi(B) = 2$
+* $\psi(C) = 1$
+
+$$\psi(A) + \psi(B) + \psi(C) = \nu(ABC) = 4$$
+
+So the efficiency is respected, as their sum is 4 and equal to $\nu(ABC)$.
+
+\pagebreak
+
+## 2. Probabilistic
+
+We have wanted to to approximate the Shapley payoffs of player 2, because he is the member that works more, 7 hours per day, player 12, because he is one of the member that works less, 3 hours per day, and player 6, because he is in the middle between them with 5 hours per day. 
+
+We have written the function *value* that return an approximation of the Shapley payoff taking in input an integer number that represents the player, the tolerance and confidence for the Hoeffding confidence intervals. 
+
+Firstly the function has to compute the simulation size M, to do it we have computed the upper bound *b* for the characteristic function. From the introductory part we have realized that the characteristic function for a variable is maximum when it is located at the end of the permutation and *b* varies among different members. On the other hand it takes its minimum value when player is located at the start of the permutation and *a* is equal to zero for each member. 
+
+Through the function *sample* we are able to pick different permutations of the team members and for each of them we compute the marginal contribution of the chosen player with respect to that permutation. (We identify the position in the permutation of our player, truncated the permutation at his position, compute the characteristic function of coalitions with and without our player and make the difference between them.) If the chosen player is in the first place of the permutation his marginal contribution is zero. Eventually we take the mean of all marginal contribution computed in each simulation, that is our approximation of the Shapley payoff for the chosen player.
+
+```{r}
+load("./char_fun.RData")
+value <- function(team_member, eps, alpha){
+  #input:
+  #team_member: an integer that represent the player that we want to study
+  #eps: tolerance
+  #alpha: confidence
+  
+  #output:
+  #Shapley payoff of the player
+  
+  #string with all the team members
+  member <- "1-2-3-4-5-6-7-8-9-10-11-12"
+  
+  #this line is useful to delete the given team member from the "member" string
+  team_member_1 <- paste("-", as.character(team_member), sep = "")
+  
+  #compute the max value that the given team member can assume 
+  b <- char_fun[[12]] - char_fun[[11]][str_remove(member, team_member_1)]
+  #b = 20 
+  
+  #compute the min value that the given team member can assume
+  a <- char_fun[[1]][team_member]
+  
+  #Through Hoeffding compute the number of iteration 
+  M <- ceiling(((b-a)^2/(2*eps^2)) * log(2/alpha))
+
+  x <- seq(1,12)
+  
+  #putting a seed
+  set.seed(1234)
+
+  value_of_person <- c(length(M))
+  for (i in 1:M){
+    
+    #sample
+    campione <- sample(x)
+    
+    #discover the position of my person
+    position <- which(campione == team_member) 
+    
+    #sort element until my person
+    element <- sort(campione[1:position])
+    
+    #write in the same format of char_fun
+    element_1<- paste(element, collapse = "-")
+    
+    #compute the value with my person
+    v_1 <- char_fun[[position]][element_1] 
+    
+    #consider separately if the member is in the first position
+    if(v_1 == 0){
+      
+      #so its values is zero
+      value_of_person[i] <- 0
+      
+    }else{
+      
+      #delete my person from the sequence
+      element_2 <- sort(element[element != team_member])
+      
+      #write in the same format of char_fun
+      element_3 <- paste(element_2, collapse = "-")
+      
+      #compute the value without my person
+      v_2 <- char_fun[[position-1]][element_3]
+      
+      #compute the value of my person 
+      value_of_person[i] <- v_1 - v_2
+    }
+  }
+  
+  #take the mean of my person 
+  return(mean(value_of_person))
+  
+}
+```
+
+We have tried to run our function with rougher value of b, but the only difference is that M increased (the approximation remained the same), so we think that is correct that the characteristic function of a player is maximum when he is located at the end of the sequence. 
+According Hoeffding (1- $\alpha$) confidence set we have:
+$M_{\epsilon}^* \ge \frac{(b-a)^2 \cdot log(\frac{2}{\alpha^2})}{2 \cdot \epsilon^2}$
+
+M is the smallest simulation size that allows to control deviation between the approximation and the true value of the Shapley payoff at a probability level equals to confidence. 
+We have chosen different tolerances and confidences for three players in such way that for each of them we have almost the same smallest simulation size, circa 330,000. 
+In this way the computational time is not too high, circa 4s for each simulation and at the same time we have very small values for $\alpha$ and $\epsilon$: confidence $1-\alpha$ is around 0.99 while the tolerance $\epsilon$ varies between 0.009 and 0.02. 
+
+Our procedure to approximate the true value of the Shapley payoff, traps the true value in an interval ($\theta-\epsilon$, $\theta+\epsilon$) with probability $1 -\alpha$ that is in every simulation a bit greater than 0.99, while the size of intervals is really small, $2 \cdot \epsilon$.
+
+For player 2 *b* is higher (7) than for player 12 (3), so for his simulation we have chosen higher tolerance and $\alpha$, to try to have similar M. While for player 6 and 12 we have the same simulation size M and confidence(1 - $\alpha$), but different values of tolerances. 
+
+```{r}
+epsilon <- c(0.02,0.015,0.009)
+confidence <- c(1-0.009, 1-0.005, 1-0.005)
+run_time <- c(length = 3)
+#starting time
+t1 <- Sys.time()
+
+#player 2
+player_2 <- value(2, epsilon[1], confidence[1])  #M = 330976
+
+#run time
+run_time[1] <- Sys.time() - t1 
+
+#starting time
+t1 <- Sys.time()
+
+#player 6
+player_6 <-value(6, epsilon[2], confidence[2])  #M = 332860
+
+#run time
+run_time[2] <- Sys.time() - t1 
+
+#starting time
+t1 <- Sys.time()
+
+#player 12
+player_12 <- value(12, epsilon[3], confidence[3]) #M = 332860
+
+#run time
+run_time[3] <- Sys.time() - t1 
+
+```
+
+We  have rescaled the payoffs that we have obtained: we have divided the results of our simulations for 45, the values of coalition includes all the player so in this way $\nu(P) = 1$. We have done it to make this game **simple**, indeed it is monotone and rescaling the characteristic function it can take values only between 0 and 1. In simple games Shapley payoff measures the *power of a player*: the probability that he can influence the outcome of the game. 
+This confirms the intuition that player 2 is the one more influential because he works more than other so he can allow to save more hours than others. The opposite reasoning for player 12, that works less than any other. 
+The more the player works the higher is his payoff. Indeed player 2 is the one with higher Shapley payoff, while player 12 the one with the smaller Shapley payoff, player 6 in the middle. The Hoeffding CI bounds that we have printed in the dataframe are given by $[\hat{SV}(j)_M \pm \epsilon]$. 
+Our results are summarized in a dataframe. 
+
+```{r}
+
+#rescale the shapley payoff and round their value
+shapley <- c(due = round(player_2/45, 3),sei = round(player_6/45, 3), dodici = round(player_12/45, 3))
+lower <- c(shapley[1] - epsilon[1], shapley[2] - epsilon[2],shapley[3] - epsilon[3])
+upper <- c(shapley[1] + epsilon[1], shapley[2] + epsilon[2],shapley[3] + epsilon[3])
+
+#player that we have chosen 
+player <- c(2,6,12)
+
+#dataframe to visualize clearer the results. 
+results <- data.frame("Player" = player,  "Shapley Payoff"=  shapley, "Lower Bound" = lower, "Upper Bound" = upper, "Tolerance" = epsilon, "Confidence" = confidence, "Run Time" = run_time)
+results
+```
+
+## 2. Bonus
+
+We have tried to write functions to get characteristic function for a general game of this type. We know from the introductory part that the value of a coalition is defined as $\nu$(C)={# of hours potentially saved by well organized coalition}. So we know that if a coalition is composed by a single person we cannot save hours, while if n players work during the same hour we save n-1 working hours. If we want to know if two or more players work at the same time we scan the schedule column by column.
+
+Firstly we have created the *char_function_1* that receives in input the schedule of workers and a vector containing the member of coalition in which we are interested in. We have thought at the schedule of workers as a matrix M where $M_{i,j} is 1 if the i-th player works at the j-th hour, 0 otherwise. This function returns the value of the given coalition. 
+
+```{r}
+
+char_function_1 <- function(matrice, lista){
+  
+  #input:
+  #matrice: it represents the schedule of workers
+  #lista: coalition of which we are interested in 
+  
+  #output:
+  #value of the given coalition 
+  
+  #we assume that if coalition is composed by one member
+  #its value is zero
+  if(length(lista) == 1){
+    return(0)
+  }else{
+    
+    #we take the the schedule of workers that belong to our coalition 
+    #(for example if we have the coalition c(1,2,4) 
+    #we will pick row 1,2 and 4 of the schedule
+    member <- matrice[lista,]
+    
+    #we compare the columns of the selected rows
+    #if two workers work during the same hour the sum of that column will be greater than one
+    #we save (the sum of the column - 1)hours
+    #we consider hours in which more players work
+    vettore <- colSums(member)
+    return(sum(vettore[vettore > 1] - 1))
+  }
+  
+}
+
+#just to have a feedback we have built the schedule of the homework
+#1 if the player works during that hour, 0 otherwise
+uno <- c(0,0,0,1,1,1,1,1)
+due <- c(1,1,1,1,1,1,1,0)
+tre <- c(0,1,1,1,1,1,1,0)
+quattro <- c(0,0,0,0,0,1,1,1)
+cinque <- c(0,0,0,0,1,1,1,0)
+sei <- c(0,0,1,1,1,1,1,0)
+sette <- c(1,1,1,1,0,0,0,0)
+otto <- c(1,1,1,0,0,0,1,0)
+nove <- c(0,1,1,1,1,0,0,0)
+dieci <- c(0,0,1,1,1,1,0,1)
+undici <- c(1,1,0,0,0,1,1,0)
+dodici <- c(0,0,0,1,0,0,1,1)
+matrice_prova <- rbind(uno,due,tre,quattro,cinque,sei,sette,otto,nove,dieci,undici,dodici)
+
+#few trials to check if our char_function_1 works
+char_function_1(matrice_prova, c(12,11,10,9,8,7,6,5,4,3,2,1)) == char_fun[[12]]
+char_function_1(matrice_prova, c(2,1)) == char_fun[[2]][1]
+char_function_1(matrice_prova, c(2)) == char_fun[[1]][2]
+
+#another example, the working hours in a day are the same, 8
+x <- seq(1,8)
+
+#number of workers
+n <- 20
+
+#just build a random matrix that represents the schedule 
+matrice <- sapply(x, function(x) sample(c(0,1), size = n, replace = T, prob = c(0.75,0.25)))
+
+#compute the value for a given coalition 
+char_function_1(matrice, c(3,14,18,15))
+```
+
+Then we have created *char_function* that taking in input the number of players *n* and the working schedule, still represented by a matrix of zeros and ones. This function computes the values for each possible coalition: firstly it saves all possible combinations in a list *comb* and later we compute the value for each coalition with the same reasoning as before. The final results are in the list *ris* that has a length equals to the number of possible coalition $2^n-1$ (-1 is due to that the empty set is not considered) and each element of this list has two values, the first one is the value of the coalition while the second one is a sequence of integer number corresponding to the coalition. We have done two query at the end two verify the results, we sort the query before making the search inside our list. At the end we compute all the combinations and their values for a general case where *n* = 200 and the working schedule is random. 
+
+```{r}
+char_function <- function(matrice, n){
+  
+  #input:
+  #matrice: it represents the schedule
+  #n: number of players
+  
+  #output:
+  #ris: list containing for each coalition its value
+  
+  #list that will contain all the combinations, all possible coalitions 
+  comb <- list()
+  for (i in 1:n){
+    
+    #we compute all the combination, that are 2^(number of players) - 1(it does not consider empty set)
+    #we use a function of library(DescTools)
+    a <- CombSet(n, i, repl=FALSE, ord=FALSE)
+    
+    #we scan all the combinations
+    for(j in 1:nrow(a)){
+      
+      #save the j-th combination in  a temporary variable
+      temp <- list(a[j,])
+      
+      #we fill the list with the combinations obtained
+      comb <- append(comb, temp)
+    }
+  }
+  
+  #it contains the value of each coalition 
+  risultato <- c(length(comb)) 
+  
+  #a list of lists that contains all the coalitions and their values
+  ris <- list()
+  
+  #scan all possible coalition
+  for(i in 1:length(comb)){
+    
+    #if coalition is composed by one member its value is one
+    if(length(comb[[i]]) == 1){
+      risultato[i] <- 0
+    }else{
+      
+      #we take the the rows of players that belong to i-th coalition
+      member <- matrice[comb[[i]],]
+      
+      #we compare the columns of the selected rows
+      #if two workers work during the same hour the sum of that column will be greater than one
+      #we save (the sum of the column - 1)hours
+      #we consider hours in which more players work
+      #just like in char_function_1 
+      vettore <- colSums(member)
+      risultato[i] <- sum(vettore[vettore > 1] - 1)
+    }
+    
+   #creation of a temporary list in which the first number is the value of the coalition, while the second is the coalition
+   temp <- list(list(risultato[i], comb[[i]]))
+   
+   #output
+   ris <- append(ris, temp)
+  }
+  #return 
+  return(ris)
+}
+
+#just to check if our function is right we take the schedule of the homework 
+char_funs <- char_function(matrice_prova, n = 12)
+
+#coalition of which we are interested in 
+query <- sort(seq(12,1))
+
+#scan all the coalition
+for(i in 1:(2^12-1)){
+  
+  #suppressWarnings needs when we compare coalition of different sizes
+  #all elements 
+  if(suppressWarnings(all(char_funs[[i]][[2]] == query)==TRUE)){
+    
+    #its value
+    print(char_funs[[i]][[1]])
+  }
+}
+
+#another example
+query <- sort(c(1,2))
+for(i in 1:(2^12-1)){
+  if(suppressWarnings(all(char_funs[[i]][[2]] == query) ==TRUE)){
+    print(char_funs[[i]][[1]])
+  }
+}
+
+#number of workers
+n <- 15
+
+#just build a random matrix that represents the schedule 
+matrice <- sapply(x, function(x) sample(c(0,1), size = n, replace = T, prob = c(0.75,0.25)))
+char_funs <- char_function(matrice, n)
+
+```
+
+## 3. Statistical
+
+Following the idea of diversification we have collected *n=15* stocks from five different sectors, three for each one.
+
+<div style = "width:40%; margin-left:30%;">
+| Sector                 |     Stocks                     | 
+| ---------------------: | :----------------------------: | 
+| Communication Services |    Netflix                     |  
+|                        |    Electronic Arts             | 
+|                        |    Activision Blizzard         | 
+| Energy                 |    Phillips 66                 |
+|                        |    Coterra                     |
+|                        |    Diamondback Energy          | 
+| Industrials            |    American Airlines Group     |  
+|                        |    United Airlines             |
+|                        |    Southwest Airlines          | 
+| Consumer Discretionary |    Domino's Pizza              |   
+|                        |    Amazon                      |  
+|                        |    Tractor Supply Company      |
+| Consumer Staples       |    Molson Coors                |
+|                        |    Kellogg's                   |
+|                        |   JM Smucker                   |
+</div>
+
+
+For each stock we have take the closing price from January 1, 2020 till today. Using the function *get_hist_quote* we have taken the closing price and not the adjusted closing price, but if we downloaded data from *"Yahoo! Finance"* and created a dataset we would not have updated data each time we would want to run the code. 
+We have created a list *quotes* in which each element i has *m* closing prices of the i-th stock, *m* is the number of days in which the Stock Market has been opened from January 1, 2020 till today.
+
+Then we have created the data matrix *X* which elements are $x_{t,j} = log(\frac{c_{t,j}}{c_{t-1,j}})$ where t and t-1 are two consecutive days. X has m-1 rows and n columns.
+
+
+```{r}
+
+suppressMessages(require(tseries, quietly = TRUE)) # Load the package
+options("getSymbols.warning4.0" = FALSE) # Stop info-messages to show up
+
+
+#tag of stocks
+company_1 = c("NFLX", "EA", "ATVI", "PSX", "CTRA", "FANG","AAL", "UAL", "LUV", "DPZ", "AMZN", "TSCO", "TAP", "K", "SJM")
+
+datamatrix <- function(company){
+  #counter
+  c = 0
+  #number of stocks
+  n = length(company)
+  #list in which each element contains all the closing prices for that stock
+  quotes <- list(length = n)
+  for(i in company){
+    c = c + 1
+    
+    #retrieving the closing price for c-th stock
+    quotes[c] <- list(get.hist.quote(instrument=i, start="2020-01-01",
+                             quote= "Close", provider="yahoo", drop=TRUE))
+    
+  }
+  #number of days in which Stock Market was open from 2020-01-01 till today
+  m <- length(quotes[[1]])
+  #data matrix
+  X <- matrix(, nrow = m - 1, ncol = n, dimnames = list(1:(m -1), company))
+  #rows of data matrix
+  r <- c(length = m - 1)
+  #for each company
+  for(j in 1:n){
+    
+    #for each pair of days
+    for(i in 1:(m-1)){
+      
+      #computing the logarithm between two closing price between i+1-th and i-th day of company j-th 
+      r[i] <- log(as.numeric(quotes[[j]][i+1])/as.numeric(quotes[[j]][i]))
+    }
+    #fill the data matrix
+    X[,j] <- r
+  }
+  return(X)
+}
+X <- datamatrix(company_1)
+```
+
+From the data matrix X we have built an adjacency matrix through the function *m_adj*: firstly we compute all possible way to take two stocks. Then we compute through the function *cor.test* an asymptotic Normal-based confidence interval for Pearson-correlation for each couple of stocks i and j and to build the adjacency matrix we put 1 in the position [i,j] and [j,i] if the confidence interval does not include zero, 0 otherwise. 
+The function *m_adj* takes in input, in addition to data matrix, also the coverage $(1-\alpha)$ of the CI because we have wanted to study how the adjacency matrix changes varying the coverage of the CI. 
+```{r}
+
+m_adj <- function(data, conf){
+  #input:
+  #data: data matrix
+  #conf: alpha for confidence interval 
+  
+  #output:
+  #adj: adjacency matrix 
+
+  #all possible way to take two stocks
+  couples <- CombSet(ncol(data), 2)
+  
+    #number of stocks
+  n = length(colnames(data))
+  
+  #list of CI for Pearson correlation for each couple of stocks
+  corrr <- list()
+  
+  #for each couple of stocks
+  for(i in 1: nrow(couples)){
+    
+    #compute CI for Pearson correlation for i-th couple of stock
+    corrr[i] <- list(cor.test(data[,couples[i,1]], data[,couples[i,2]], method = "pearson", conf.level = conf)$conf.int)
+  }
+  
+  #initialize the adjacency matrix
+  adj <- matrix(0, nrow = n, ncol = n, dimnames=list(colnames(data), colnames(data)))
+  
+  #for each couple of stocks
+  for(i in 1:nrow(couples)){
+    
+    #check if the extremes of CI are concordant
+    if((corrr[[i]][1] * corrr[[i]][2] > 0)){
+      
+      #we put an edge if CI does not include zero
+      #adjacency matrix is symmetric
+      adj[couples[i,1],couples[i,2]] <- 1
+      adj[couples[i,2],couples[i,1]] <- 1
+    }
+  }
+  
+  #adjacency matrix
+  return(adj)
+}
+
+#compute different adjacency matrix for different alpha
+adi_1 = m_adj(X, 0.5)
+adi_2 = m_adj(X, 0.7)
+adi_3 = m_adj(X, 0.9)
+adi_4 = m_adj(X, 0.99)
+adi_5 = m_adj(X, 0.9999)
+adi_6 = m_adj(X, 0.999999)
+```
+
+### 3.3
+After building the adjacency matrix we draw the corresponding graph for each level of alpha that we have chosen. Just looking the graph we have noticed that the more $(1-\alpha)$ is near 1 the less the stocks are connected each other. 
+
+```{r, echo =FALSE}
+
+#just a visualization of the graphs obtained
+
+visualize <- function(adj){
+  #input:
+  #adj: adjacency matrix
+  
+  #output:
+  #plot of the graph
+  
+  #from adjacency matrix to graph
+  grafo <- network(adj)
+  
+  #attribute of the vertex
+  #important for the legend of vertexes'color
+  grafo %v% "GICS" <- c(rep("Comm.Serv",3),rep("Energy",3),rep("Industrials",3),rep("Cons.Discr",3),rep("Cons.Staples",3))
+  
+  #plot of the graph
+  grafo <- ggnet2(grafo, color = "GICS", palette = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"),label = colnames(adj), label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+  return(grafo)
+}
+
+#just to visualize contemporarely more graph
+gridExtra::grid.arrange(visualize(adi_1) + ggtitle("alpha = 0.5"), visualize(adi_2) +ggtitle("alpha = 0.3"), nrow = 2)
+gridExtra::grid.arrange(visualize(adi_3) + ggtitle("alpha = 0.1"), visualize(adi_4) +ggtitle("alpha = 0.01"), nrow = 2)
+gridExtra::grid.arrange(visualize(adi_5) + ggtitle("alpha = 0.0001"), visualize(adi_6) +ggtitle("alpha = 0.000001"), nrow = 2)
+```
+
+Reading the *Forum Homeworks* we have tried also the function *corr.test* of the library *psych* specifying that we will apply the Bonferroni correction and we will build the graph using a matrix of p-values. We can observe that we will obtain the same graphs and results obtained previously. So this is just a check and an other way to proceed. 
+
+```{r, echo=F}
+corrr_1bis = corr.test(X, use = "pairwise", method = "pearson", adjust = "bonferroni", alpha = 0.000001)
+adi_1bis = (corrr_1bis$p < 0.000001)*1
+
+corrr_2bis = corr.test(X, use = "pairwise", method = "pearson", adjust = "bonferroni", alpha = 0.5)
+adi_2bis = (corrr_2bis$p < 0.5)*1
+
+#just to visualize contemporarely more graph
+gridExtra::grid.arrange(visualize(adi_2bis) + ggtitle("Graph through p-matrix, alpha = 0.5"), visualize(adi_1bis) +ggtitle("Graph through p-matrix, alpha = 0.000001"), nrow = 2)
+```
+
+
+To look in depth how and which edges are filtered increasing the value of $\alpha$ we have tried to write some visualization and functions. 
+
+Firstly through the function *check* we check if among stocks of the same sector there is always the max number of edges. We can check through the adjacency matrix. It has turned out that stocks of the same sector are always linked independently from the level $(1-\alpha)$. So stocks of the same sectors always make a clique! Indeed in each of these graphs there is always a clique of at least size three (number of stocks in a group). This behaviour confirms the hypothesis of the homework's instructions: *"stocks from the same GICS sectors should tend to be clustered together"*. 
+
+```{r}
+check <- function(adj){
+  #input:
+  #adj: adjacency matrix
+  
+  #message to check if CI's of stock in the same group does not include zero
+  
+  #counter of edges of the same sector
+  c <- 0
+  
+  #we have stocks of the same sector in adjacent columns 
+  #(each 3 column we have a different sector).
+  for(i in seq(1,ncol(adj),3)){
+    
+    #we check if in this submatrix 3x3 the upper triangular matrix is made by all ones
+    if(adj[i,i+1] + adj[i,i+2] + adj[i+1,i+2] == 3){
+      
+      #updated the counter 
+      c <- c + 3
+    }else{
+      return("Attention: CI's of stock in the same group include zero")
+    }
+  }
+  if(c == ncol(adj)){
+    return("CI's of stock in the same group does never include zero")
+  }
+}
+```
+
+```{r, echo = FALSE}
+alpha=c("0.5","0.3","0.1","0.01","0.0001","0.000001")
+paste(check(adi_1), "for alpha = ", alpha[1])
+paste(check(adi_2), "for alpha = ", alpha[2])
+paste(check(adi_3), "for alpha = ", alpha[3])
+paste(check(adi_4), "for alpha = ", alpha[4])
+paste(check(adi_5), "for alpha = ", alpha[5])
+paste(check(adi_6), "for alpha = ", alpha[6])
+```
+
+Then we have plotted a stacked barplot in which for each sector and for each level of $(1- \alpha)$ we visualize through the height of the bars the number of edges between a sector and all the others. In this way we notice clearly that edges between different sectors are filtered increasing the coverage of CI. In this barplot some edges are counted more times because we consider a different sector each time and edges often coincide.
+
+From the graphs and barplot we can think that there are sectors that are similar between them. It seems reasonable that stocks coming from Energy and Industrial are linked together as stocks from Consumer Discretionary and Communication services because maybe they are related in the Market. 
+
+```{r}
+
+#list of adjacency matrix
+ad <- list(adi_1, adi_2, adi_3, adi_4, adi_5, adi_6)
+
+#vector that will contain the size of the largest clique(s)
+size_click <- c()
+
+#list that contains largest cliques in the graph for each level of alpha
+largest_click <- list()
+t <- graph_from_adjacency_matrix(adi_1, mode = "undirected")
+
+#cluster edge betweenness
+gruppi <- list()
+
+#list that contains cliques with at least 4 vertexes in the graph for each level of alpha
+click <- list()
+
+#counter
+c <- 0
+
+#contains for each graph the total number of edges
+frecce <- c()
+
+#vector that will contain number of edges between a sector and the others
+edge_out = c()
+
+#for each adjacency matrix
+for(i in ad){
+  c <- c + 1
+  
+  #create the graph from adjacency matrix
+  t <- graph_from_adjacency_matrix(i, mode = "undirected")
+  
+  #calculates the size of the largest clique(s).
+  size_click[c] <- clique_num(t)
+  
+  #argest cliques in the input graph for each level of alpha
+  largest_click[[c]]<- largest.cliques(t)
+  
+  #cliques with at least 4 vertexes in the graph for each level of alpha
+  click[[c]] <- cliques(t, min = 6)
+  
+  gruppi[[c]] <- cluster_edge_betweenness(t)
+  
+  
+  #compute the degree for each node
+  #-2 because we are interested in number of edges between a stock and stock belonging to other sectors
+  #there are always two edges between a stock and the other two stocks belonging to the same sector
+  degree_out_group <- degree(t) - 2
+
+  #computing the total number of edges
+  frecce[c] <-  gsize(t)
+  
+  #first element is the number of edges between Communication Services and other sectors
+  #second element is the number of edges between Energy and other sectors and so on
+  edge_out <- c(edge_out, sum(degree_out_group[1:3]), sum(degree_out_group[4:6]), sum(degree_out_group[7:9]), sum(degree_out_group[10:12]), sum(degree_out_group[13:15]))
+}
+
+#different values of chosen alpha
+alpha <- c(rep("a=0.5" , 5) , rep("a=0.3" , 5) , rep("a=0.1" , 5) , rep("a=0.01" , 5), rep("a=0.0001" , 5), rep("a=0.000001" , 5))
+
+#chosen sectors
+groups <- rep(c("Comm.Serv", "Energy" , "Industrials", "Cons.Discr","Cons.Staples") , 6)
+
+#number of edges between a sector and the others
+edges_with_other_groups <- edge_out
+
+#dataframe
+data <- data.frame("Different values of alpha" = alpha, groups, "Number of edges with other groups" = edges_with_other_groups)
+
+#visualization
+ggplot(data, aes(fill=groups, y=edges_with_other_groups, x=alpha)) + 
+  geom_bar(position="dodge", stat="identity")+ scale_fill_manual("legend", values = c("Comm.Serv" = "orchid", "Energy" = "lightblue", "Industrials" = "tomato", "Cons.Discr"="yellow", "Cons.Staples" = "lightgreen"))
+```
+
+Reading the pdf documentation of *igraph* we have found also the function *cluster_edge_betweenness* that is helpful for community detection:
+*"Many networks consist of modules which are densely connected themselves but sparsely connected to other modules."* This seems exactly our case indeed for $(1-\alpha)$ greater than 0.99 there are two clusters. So using this function we have a confirm that we have two communities in graph with $(1-\alpha)$ = 0.9999: 
+
+```{r,echo=FALSE}
+gruppi[[5]][1]$'1'
+gruppi[[5]][2]$'2'
+```
+
+For each level of alpha that we have chosen we have computed the largest cliques in the graph and their size. In the graph with $(1- \alpha) = 0.9999$ the two clusters are two cliques: the first one is the largest clique, that has size = 7, is:
+ 
+```{r,echo=FALSE}
+largest_click[[5]][[1]]
+```
+
+While the other one is a clique of size = 6: "
+
+```{r,echo=FALSE}
+click[[5]][[2]]
+```
+
+These functions verify the draw of the graphs. 
+
+Without Consumer Staples the graph is disconnected in two cluster. Instead for alpha smaller than 0.9 all the stocks are more connected each other an for $(1-\alpha)$ = 0.5 the graph is almost fully connected, indeed the largest clique has size 10 and it is: 
+
+```{r, echo = FALSE}
+largest_click[[1]][[1]]
+```
+
+We visualize through a barplot how many edges were dropped from a graph to the other: on the x-axis we have written the values of alpha of the two considered graphs and the height of the bar represents how many edges were dropped between that two graphs. Edges between stocks of the same sector are very consistent because they have never been dropped. 
+
+```{r, echo=F}
+f <- c(frecce[1]-frecce[2],frecce[2]-frecce[3],frecce[3]-frecce[4],frecce[4]-frecce[5],frecce[5]-frecce[6])
+data <- data.frame(
+  alpha=c("0.5;0.3","0.3;0.1","0.1;0.01","0.01;0.001","0.0001;0.000001"),  
+  edge_difference=f
+  )
+# Barplot
+ggplot(data, aes(x=rev(alpha), y=edge_difference)) + 
+  geom_bar(stat = "identity", color="blue", fill=rgb(0.1,0.4,0.5,0.7) )
+```
+
+In this other barplot we have counted how many edges there are between different sectors just to visualize again the trend of number edges between different sectors for our different level of alpha. 
+
+```{r, echo=F}
+data <- data.frame(
+  alpha=c("0.5","0.3","0.1","0.01","0.0001","0.000001"),  
+  edges_between_different_sector = frecce - 15
+  )
+# Barplot
+ggplot(data, aes(x=alpha, y=edges_between_different_sector)) + 
+  geom_bar(stat = "identity", color="red", fill = "lightcoral")
+```
+
+After having seen how the number of edges changes with $\alpha$ we want to see if taking the same number of stocks from the same sector we obtain the same kind of graph with two clusters. 
+
+```{r}
+#new stocks
+company_2 = c("GOOGL", "T", "DISCK", "APA", "BKR", "CVX","ALK", "WM", "UNP", "UAA", "TSLA", "SBUX", "PM", "PEP", "KO")
+
+#new data matrix
+X_2 <- datamatrix(company_2)
+```
+```{r}
+#compute different adjacency matrix for different alpha
+adi_7 = m_adj(X_2, 0.5)
+adi_8 = m_adj(X_2, 0.7)
+adi_9 = m_adj(X_2, 0.9)
+adi_10 = m_adj(X_2, 0.99)
+adi_11 = m_adj(X_2, 0.9999)
+adi_12 = m_adj(X_2, 0.999999)
+
+t <- graph_from_adjacency_matrix(adi_7, mode = "undirected")
+paste("The largest clique in the graph with (1 - alpha) = 0.5 has a size of ", clique_num(t))
+
+t <- graph_from_adjacency_matrix(adi_12, mode = "undirected")
+paste("The largest clique in the graph with (1 - alpha) = 0.9999 has a size of ", clique_num(t))
+
+
+#just to visualize contemporarely more graph
+gridExtra::grid.arrange(visualize(adi_7) + ggtitle("alpha = 0.5"), visualize(adi_12) +ggtitle("alpha = 0.999999"), nrow = 2)
+```
+
+We obtain a pretty different results indeed we obtained a graph that is fully connected for $(1 - \alpha) = 0.5$, while in the one with $\alpha$ = 0.999999 just few edges are filtered. So the influence of $\alpha$ is really restrained respect to the stocks that we have chosen initially. 
+
+So we cannot generalize telling for example that stocks from Energy sector are linked to stocks from Industrials, while they are not connected to stocks from Communication services. It seems that the choice of single stocks is crucial. Now we have been curious to see what happens if we chose still three stocks but from the other five sectors. 
+
+```{r}
+company_3 <- c("WFC", "NDAQ", "JPM", "PFE", "CTLT", "JNJ", "EIX", "ATO", "AWK", "ACN", "PYPL", "ORCL", "APD", "IP", "IFF")
+
+#new data matrix
+X_3 <- datamatrix(company_3)
+
+adi_14 <- m_adj(X_3, 0.9999)
+
+#from adjacency matrix to graph
+grafo_14 <- network(adi_14)
+
+t <- graph_from_adjacency_matrix(adi_14, mode = "undirected")
+
+
+paste("The largest clique has a size of ", clique_num(t))
+
+
+#attribute of the vertex
+#important for the legend of vertexes'color
+grafo_14 %v% "GICS" <- c(rep("Financials",3),rep("Health Care",3),rep("Utilities",3),rep("IT",3),rep("Materials",3))
+
+#plot of the graph
+grafo_14 <- ggnet2(grafo_14, color = "GICS", palette = c("Financials" = "purple", "Health Care" = "steelblue", "Utilities" = "gray", "IT"="salmon", "Materials" = "green"),label = colnames(adi_14), label.size = 2,label.color = "black", edge.size = 0.3, node.size = 7)
+grafo_14
+
+```
+
+Also with the other five sectors we obtained a graph that is almost fully connected for each level $\alpha$ so we can conclude that it is true that stocks from the same GICS sectors are clustered together, but they interact a lot, almost in the same way, also with stocks of other sectors. Just in the first portfolio we have seen a strong separation between stocks of different sectors, but this is due to the singular stocks that we have chosen because with other stocks of the same sectors this separation does not exist anymore. While in the other cases all the stocks seem related each other. We have thought that this behaviour could be due to Covid-19, that is a phenomenon that has damaged all the sectors indiscriminately and so in this way it could have linked all together. Maybe just few companies differentiate from the others like Netflix or Amazon that we have selected in our original portfolio.
+
+### 3.4
+
+The Shapley allocation to each stock j $\in$ {1,...,p} is given by: 
+$\psi(j)^G = E(X_j) - \omega \cdot \sum_{r=1}^p Cov(X_j, X_r)$. 
+
+Now we have to build bootstrapped confidence intervals: firstly we have written the function *bootstrapp* that takes in input the stock which are interested in, and the weight and it gives in output *B* bootstrap approximation of Shapley value for that stock: we have chosen arbitrary the number of resampling *B*. Then we resample the entire data matrix X, computing the mean of the column (stock) that we are chosen and sum of covariances between the chosen stock and all the others. 
+
+The function *shapley_hat* takes in input the weight and it gives in output a vector of lenght equals to number of chosen stocks (15) in which each element i is the the i-th bootstrapped approximation of the Shapley value. 
+
+Finally through the function *CI_quantile* we compute the percentile confidence intervals for the Shapley value. We have chosen this kind of interval because we have plotted the histograms of bootstrapped approximated Shapley values and they are quite symmetric so we have thought that a symmetrizing transformation can exist. (For high value of B that we have tried these histograms are like Normal, so maybe we could use also Normal CI. We have made some trials and we have obtained actually the same results). 
+
+```{r}
+#BOOTSTRAP
+#all possible way to take two stocks
+couples <- CombSet(nrow(X),2)
+
+#number of stocks
+n = ncol(X)
+
+bootstrapp <- function(stockk, weight){
+  #input:
+  
+  #stockk: stock that we have take into consideration to Shapley
+  #weight: weight that we have chosen
+  
+  #output:
+  #btheta: bootstrap approximation of shapley value
+  
+  #number of resampling
+  B <- 500
+  
+  #stocks
+  vec_stok <- seq(1,n)
+
+  #initialization for the mean
+  btheta_media <- rep(NA, B)
+  
+  #initialization for the Shapley initialization
+  btheta <- rep(NA, B)
+  
+  
+  for (b in 1:B){
+    
+    #we resample the index of the rows
+    idx <- sample (1:(nrow(X)-1), replace = T)
+    
+    #matrix bsamp that has the same dimension of X, rows will change
+    bsamp <- matrix(, nrow = nrow(X) - 1, ncol = n, dimnames = list(1:(nrow(X) -1), colnames(X)))
+    
+    #for each column
+    for(j in 1:n){
+      
+      #new column 
+      bsamp[,j] <- X[idx,j]
+      
+    }
+    
+    #approximation of the mean
+    btheta_media[b] <- mean(bsamp[,stockk])
+    
+    #initialization of the sum of the covariances 
+    covar <- 0
+    
+    #for each stock 
+    for(k in vec_stok){
+      
+      #computing the sum of the covariances 
+      covar <- covar + cov(bsamp[,stockk],  bsamp[,k])
+    }
+    
+    #computing the approximation of shapley value
+    btheta[b] <- btheta_media[b] - weight * covar
+  }
+
+  return(btheta)
+}
+
+shapley_hat <- function(weight){
+  
+  #input:
+  #weight: chosen weight
+  
+  #output:
+  #approximation of the Shapley values
+  
+  #initialization 
+  shapley <- c(length = 15)
+  
+  for(i in 1:n){
+    
+    #mean of the column
+    media <- mean(X[,i])
+    
+    #initialization of sum of covariances
+    covar <- 0
+    
+    for(j in seq(1,n)){
+      
+      #sum of the covariances
+      covar <- covar + cov(X[,i],X[,j])
+    }
+    
+    #approximation of the shapley
+    shapley[i] <- media - weight * covar 
+  }
+  
+  return(shapley)
+}
+
+
+CI_quantile <- function(alpha, weight){
+  #input:
+  
+  #alpha: level of confidence interval
+  #weight: weight in the Shapley value
+  
+  #output:
+  #q_boot: list of confidence interval for each stock
+  
+  #initialization of list of confidence interval
+  q_boot <- list()
+  
+  #for each stock
+  for(i in 1:n){
+    
+    #computing the confidence interval for i-th stock
+    q_boot[[i]]<- quantile(bootstrapp(i,weight),c(alpha/2, 1-alpha/2))
+  }
+  
+  return(q_boot)
+}
+
+
+hist(bootstrapp(10, 0.1), prob = T, breaks = 50, col = "darkgreen", xlab = "Shapley value", main = "Hist. of bootstrapped Shapley value of 10th stock for w=0.1")
+
+#"true value"
+abline(v = shapley_hat(0.1)[10], lwd = 3, col = "red")
+
+#hist(bootstrapp(1, 0.1), prob = T, breaks = 50, col = "darkgreen", xlab = "Shapley value")
+#abline(v = shapley_hat(0.1)[1], lwd = 3, col = "red")
+
+#hist(bootstrapp(5, 0.1), prob = T, breaks = 50, col = "darkgreen", xlab = "Shapley value")
+#abline(v = shapley_hat(0.1)[5], lwd = 3, col = "red")
+```
+
+Now we have chosen three different $\alpha$ and $\omega$ to see how the bootstrapped confidence intervals change and we compute the "true" (in the bootstrap world) value of Shapley for each $\omega$. 
+
+```{r}
+#vector of chosen alpha
+alpha <- c(0.05, 0.01, 0.0001)
+
+#vector of chosen weights
+weightss <- c(0.1, 0.5, 10)
+
+#list of CI 
+ci <- list()
+
+#counter
+c <- 0
+
+#for each chosen alpha
+for(i in alpha){
+  
+  #for each chosen weights
+  for(j in weightss){
+    
+        c <- c +1
+        
+        #computing the CI
+        ci[[c]] <- CI_quantile(i, j)
+  }
+}
+
+#shapley hat
+s_1 <- shapley_hat(weightss[1])
+s_2 <- shapley_hat(weightss[2])
+s_3 <- shapley_hat(weightss[3])
+
+#ci for difference alpha and weights
+ci_a1_w1 <- unlist(ci[[1]])
+ci_a1_w2 <- unlist(ci[[2]])
+ci_a1_w3 <- unlist(ci[[3]])
+ci_a2_w1 <- unlist(ci[[4]])
+ci_a2_w2 <- unlist(ci[[5]])
+ci_a2_w3 <- unlist(ci[[6]])
+ci_a3_w1 <- unlist(ci[[7]])
+ci_a3_w2 <- unlist(ci[[8]])
+ci_a3_w3 <- unlist(ci[[9]])
+```
+
+Since X is a matrix made by values really near to zero (they are logarithms of ratios of similar values: between two days, closing price are never too different) so $E(X_j)$ is a value near to zero and so the covariances. So we expect that the Shapley values are also near to zero for weights not too big (like $10^4$). 
+
+```{r, echo= FALSE}
+#plot weight = 0.1
+
+plotCI(1:15, s_1, ui = ci_a1_w1[seq(2,length(ci_a1_w1),2)], li = ci_a1_w1[seq(1,length(ci_a1_w1),2)], col = "red",xlab ="Vertex", ylab = "CI", lwd= 2,ylim = c(-0.013, 0.01), main ="CI for weight = 0.1")
+
+plotCI(1:15, s_1, ui = ci_a2_w1[seq(2,length(ci_a2_w1),2)], li = ci_a2_w1[seq(1,length(ci_a2_w1),2)], col = "blue", add = TRUE, lwd= 2,ylim = c(-0.013, 0.01))
+
+plotCI(1:15, s_1, ui = ci_a3_w1[seq(2,length(ci_a3_w1),2)], li = ci_a3_w1[seq(1,length(ci_a3_w1),2)], col = "black", add = TRUE, lwd= 2, ylim = c(-0.013, 0.01))
+
+legend(x="bottomright", legend = c("alpha = 0.05", "alpha = 0.01", "alpha = 0.0001"), fill = c("red", "blue", "black"), box.lwd = 2, cex = 0.6)
+```
+
+```{r, echo= FALSE}
+#plot weight = 0.5
+
+plotCI(1:15, s_2, ui = ci_a1_w2[seq(2,length(ci_a1_w2),2)], li = ci_a1_w2[seq(1,length(ci_a1_w2),2)], col = "red",xlab ="Vertex", ylab = "CI", lwd= 2, ylim = c(-0.019, 0.007), main ="CI for weight = 0.5")
+
+plotCI(1:15, s_2, ui = ci_a2_w2[seq(2,length(ci_a2_w2),2)], li = ci_a2_w2[seq(1,length(ci_a2_w2),2)], col = "blue", add = TRUE, lwd= 2, ylim = c(-0.019, 0.007))
+
+plotCI(1:15, s_2, ui = ci_a3_w2[seq(2,length(ci_a3_w2),2)], li = ci_a3_w2[seq(1,length(ci_a3_w2),2)], col = "black", add = TRUE, lwd= 2, ylim = c(-0.019, 0.007))
+
+legend(x="bottomright", legend = c("alpha = 0.05", "alpha = 0.01", "alpha = 0.0001"), fill = c("red", "blue", "black"), box.lwd = 2, cex = 0.6)
+```
+
+```{r, echo=FALSE}
+#plot weight = 10
+
+plotCI(1:15, s_3, ui = ci_a1_w3[seq(2,length(ci_a1_w3),2)], li = ci_a1_w3[seq(1,length(ci_a1_w3),2)], col = "red",xlab ="Vertex", ylab = "CI", lwd= 2, main ="CI for weight = 10",ylim = c(-0.20, 0.03))
+
+plotCI(1:15, s_3, ui = ci_a2_w3[seq(2,length(ci_a2_w3),2)], li = ci_a2_w3[seq(1,length(ci_a2_w3),2)], col = "blue", add = TRUE, lwd= 2)#, ylim = c(-0.05, 0.04))
+
+plotCI(1:15, s_3, ui = ci_a3_w3[seq(2,length(ci_a3_w3),2)], li = ci_a3_w3[seq(1,length(ci_a3_w3),2)], col = "black", add = TRUE, lwd= 2)#, ylim = c(-0.05, 0.04))
+
+legend(x="bottomright", legend = c("alpha = 0.05", "alpha = 0.01", "alpha = 0.0001"), fill = c("red", "blue", "black"), box.lwd = 2, cex = 0.6)
+```
+
+On the x-axis we have the index of the stock while on y-axis the CI for each level of alpha. For 6th, 7th and 8th stock we obtain a larger CI than other stocks. 
+From these three plots we notice the smaller is alpha the larger is the confidence interval.
+This is as expected because decreasing $\alpha$ we are increasing confidence level. 
+The larger is $\omega$ the smaller are values for Shapley values, because in the formula $\omega$ is preceded by a minus. *"If a stock contributes to hedge a risk, then it is “rewarded” with a negative Shapley value"*. *Hedging is a technique that is meant to reduce potential loss.* *"If perfect hedging can be achieved, then the Shapley value is identically zero, no matter what the individual variances are."* In this case approximation of Shapley values are really near to zero for $\omega$ = 0.5, but not perfectly. For larger $\omega$ we obtain smaller Shapley values. 
